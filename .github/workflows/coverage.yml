@@ -1,0 +1,182 @@
+name: Coverage
+
+# Measures how much of degory/ghul's own ghūl source the end-to-end suites
+# execute, and renders the result as this repo's HTML report. Runs here
+# (checking out degory/ghul rather than the other way around) because
+# turning captured Cobertura data into the report - and hosting it - is
+# what this repo is for; degory/ghul's build/coverage.sh only captures.
+#
+# Deliberately kept off the pull-request path: instrumentation slows the
+# integration suite by roughly an order of magnitude, which is fine for a
+# periodic run but would not fit degory/ghul's PR gate budget.
+on:
+  schedule:
+    # Mondays and Thursdays, 03:00 UTC.
+    - cron: '0 3 * * 1,4'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  coverage:
+    name: Capture coverage and build the report
+
+    # Smaller than degory/ghul's integration-test job. Every instrumented
+    # compiler process merges its hit counts through one mutex-guarded
+    # file, so throughput stops tracking core count well before the 16
+    # vCPU that job uses, and the run is billed for size as well as
+    # duration.
+    runs-on: ubicloud-standard-8
+
+    # Measured on 8 cores: unit a few seconds, analysis a little under 5
+    # minutes, integration a little under 20. Cross-assembly is not yet
+    # measured, but is a smaller suite than integration by test count.
+    # Report generation (analyser-driven highlighting/hover over ~500
+    # files, then the site build) adds a couple of minutes on top. A run
+    # that hits this limit is lost entirely rather than partly salvaged -
+    # keep the headroom generous until a live run gives a real total.
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out ghul-coverage-report
+        uses: actions/checkout@v6
+        with:
+          path: ghul-coverage-report
+
+      - name: Check out ghul
+        uses: actions/checkout@v6
+        with:
+          repository: degory/ghul
+          path: ghul
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          cache: true
+          cache-dependency-path: |
+            ghul/**/Directory.Packages.props
+            ghul/**/.config/dotnet-tools.json
+            ghul-coverage-report/**/Directory.Packages.props
+            ghul-coverage-report/**/.config/dotnet-tools.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Restore ghul's local .NET tools
+        working-directory: ghul
+        run: dotnet tool restore
+
+      # The manifest pin is only a fallback; the rest of ghul's CI builds
+      # with the latest published compiler, so coverage should reflect
+      # the same thing.
+      - name: Use the latest published compiler
+        working-directory: ghul
+        run: dotnet tool update --local ghul.compiler
+
+      # Builds ghul with debug information, instruments it, and runs every
+      # suite - unit, integration, cross-assembly, analysis - against the
+      # instrumented build. Writes coverage/*.cobertura.xml and stops.
+      - name: Capture coverage
+        working-directory: ghul
+        run: ./build/coverage.sh --suite all
+
+      - name: Restore coverage-data-tool's local .NET tools
+        working-directory: ghul-coverage-report/coverage-data-tool
+        run: dotnet tool restore
+
+      # coverage-data-tool drives the analyser against ghul directly, so
+      # it needs the same reference-assembly manifest the analyser always
+      # needs (see degory/ghul-mcp for another consumer of this target).
+      - name: Generate ghul's assemblies manifest
+        working-directory: ghul
+        run: dotnet build -verbosity:quiet -t:GenerateAssembliesJson
+
+      - name: Generate report data
+        working-directory: ghul-coverage-report/coverage-data-tool
+        run: |
+          dotnet run -- \
+            "-reports:${{ github.workspace }}/ghul/coverage/*.cobertura.xml" \
+            "-project:${{ github.workspace }}/ghul" \
+            "-targetdir:${{ github.workspace }}/ghul-coverage-report/site/coverage-data"
+
+      # VitePress copies public/'s contents verbatim to the site root,
+      # which is how the badge lands at a stable, predictable deployed
+      # URL (.../badge.json) for a README to point a shields.io endpoint
+      # badge at.
+      - name: Stage the badge for the site build
+        working-directory: ghul-coverage-report/site
+        run: |
+          mkdir -p public
+          cp coverage-data/badge.json public/badge.json
+
+      - name: Install site dependencies
+        working-directory: ghul-coverage-report/site
+        run: npm ci
+
+      - name: Build the report site
+        working-directory: ghul-coverage-report/site
+        run: npm run build
+
+      - name: Surface the headline number
+        working-directory: ghul-coverage-report/site
+        run: |
+          message="$(sed -n 's/.*"message":"\([^"]*\)".*/\1/p' coverage-data/badge.json)"
+          if [[ -n "$message" ]]; then
+            echo "**Line coverage: $message**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: ghul-coverage-report/site/.vitepress/dist/
+          retention-days: 30
+
+  deploy:
+    name: Publish coverage report
+    needs: coverage
+
+    # Only a scheduled run, or a manual dispatch on main, publishes - a
+    # workflow_dispatch on some other ref can be used to try the job out
+    # without touching the live report.
+    if: github.ref == 'refs/heads/main'
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      # deploy runs on its own runner, with none of the coverage job's
+      # filesystem - fetch the report the previous job uploaded.
+      - name: Download coverage report
+        uses: actions/download-artifact@v8
+        with:
+          name: coverage-report
+          path: coverage-report
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: coverage-report
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

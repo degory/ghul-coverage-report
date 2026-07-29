@@ -7,8 +7,8 @@ breakdown, and drill-down source pages with ghūl-aware syntax highlighting
 and per-line coverage annotation.
 
 Intended as a drop-in replacement for the report-generation half of
-[ReportGenerator](https://reportgenerator.io) in ghūl's own coverage
-pipeline (`ghul/build/coverage.sh`), deployed to GitHub Pages.
+[ReportGenerator](https://reportgenerator.io). Deployed to GitHub Pages at
+<https://degory.github.io/ghul-coverage-report/>.
 
 ## Layout
 
@@ -21,6 +21,16 @@ pipeline (`ghul/build/coverage.sh`), deployed to GitHub Pages.
   pipeline: the same vendored TextMate grammar, Shiki-based highlighting
   build step, and `GhulExample.vue`-derived rendering) that turns
   `coverage-data-tool`'s JSON output into the static report.
+- `.github/workflows/coverage.yml` — the scheduled job (Mon/Thu 03:00 UTC,
+  plus manual dispatch) that runs the whole pipeline end to end: checks out
+  [degory/ghul](https://github.com/degory/ghul), runs its
+  `build/coverage.sh` to capture Cobertura reports across the unit,
+  integration, cross-assembly and analysis suites, runs
+  `coverage-data-tool` against them, builds `site/`, and deploys the
+  result. Coverage capture lives in `degory/ghul` (it needs that repo's
+  own source and tests); turning the captured data into a report — and
+  hosting it — is this repo's job, hence the cross-repo checkout runs
+  here rather than the other way around.
 
 Design notes and the phased implementation plan live in the ghūl workspace's
 `docs/claude/coverage-report-generator.md` (not part of this repo — that
@@ -29,5 +39,6 @@ not project documentation).
 
 ## Status
 
-Early — Phase 1 (headline + sortable table, no highlighting yet) in
-progress. See `AGENTS.md` for the current architecture.
+Working end to end: headline coverage, sortable/groupable views, syntax
+highlighting, hover tooltips, and the scheduled GitHub Pages deployment are
+all in place. See `AGENTS.md` for the current architecture.
