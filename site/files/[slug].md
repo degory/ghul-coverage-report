@@ -1,5 +1,4 @@
 ---
-title: "{{ $params.path }}"
 layout: page
 ---
 
