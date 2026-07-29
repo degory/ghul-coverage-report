@@ -192,7 +192,8 @@ const branchRate = computed(() => rate(totals.value.branchesCovered, totals.valu
       </label>
     </div>
 
-    <table v-if="group === 'type'" class="coverage-table">
+    <div v-if="group === 'type'" class="table-scroll">
+    <table class="coverage-table">
       <thead>
         <tr><th>Type</th><th>Namespace</th><th class="num">Missed</th><th>Lines</th><th>Branches</th></tr>
       </thead>
@@ -206,8 +207,10 @@ const branchRate = computed(() => rate(totals.value.branchesCovered, totals.valu
         </tr>
       </tbody>
     </table>
+    </div>
 
-    <table v-else-if="group === 'file'" class="coverage-table">
+    <div v-else-if="group === 'file'" class="table-scroll">
+    <table class="coverage-table">
       <thead>
         <tr><th>File</th><th class="num">Missed</th><th>Lines</th><th>Branches</th></tr>
       </thead>
@@ -220,9 +223,11 @@ const branchRate = computed(() => rate(totals.value.branchesCovered, totals.valu
         </tr>
       </tbody>
     </table>
+    </div>
 
     <div v-else v-for="group in groupedMethodRows" :key="group.namespace + '.' + group.type" class="method-group">
       <h3>{{ group.namespace }}.{{ group.type }}</h3>
+      <div class="table-scroll">
       <table class="coverage-table">
         <thead><tr><th>Method</th><th class="num">Missed</th><th>Lines</th><th>Branches</th></tr></thead>
         <tbody>
@@ -234,6 +239,7 @@ const branchRate = computed(() => rate(totals.value.branchesCovered, totals.valu
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
   </div>
 </template>
@@ -241,6 +247,7 @@ const branchRate = computed(() => rate(totals.value.branchesCovered, totals.valu
 <style scoped>
 .coverage-index {
   padding: 0 24px;
+  padding-left: calc(24px + var(--explorer-inset));
 }
 
 .coverage-index a {
@@ -315,10 +322,19 @@ const branchRate = computed(() => rate(totals.value.branchesCovered, totals.valu
   font-variant-numeric: tabular-nums;
 }
 
+/* Five columns of numbers plus a fully-qualified type name overflow a
+   narrow screen, and a table that widens the document makes the browser fit
+   the whole page to the table's width - so each table sits in its own
+   scroller (.table-scroll) rather than stretching the document. */
+.table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+  margin-bottom: 24px;
+}
+
 .coverage-table {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 24px;
 }
 
 .coverage-table th, .coverage-table td {

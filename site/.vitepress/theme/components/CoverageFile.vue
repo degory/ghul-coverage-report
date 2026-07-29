@@ -56,6 +56,10 @@ function covTitle(line) {
   return `Covered - ${visits}${branches}`
 }
 
+// Digit count of the highest line number, so the gutter can be given a
+// width in `ch` and the coverage lane can be pinned immediately after it.
+const digits = computed(() => String(props.lines.length).length)
+
 // Precomputed once per file rather than per render: these are pure
 // functions of immutable props, and the largest source files here run to
 // several thousand lines.
@@ -119,7 +123,19 @@ function onOut(event) {
   <div class="coverage-file">
     <a class="back-link" :href="withBase('/')">&larr; Back</a>
     <h1 class="file-path">{{ path }}</h1>
-    <table class="coverage-source" @mouseover="onOver" @mouseout="onOut">
+    <!-- Source lines don't wrap, so without a scroll container of their own
+         the widest line in the file sets the width of the whole document.
+         On a narrow screen the browser then fits that document to the
+         viewport, and since every file has a different longest line, each
+         one renders at a different zoom. Scrolling here instead keeps the
+         document at viewport width whatever the file contains. -->
+    <div class="source-scroll">
+      <table
+        class="coverage-source"
+        :style="{ '--gutter-width': `calc(${digits}ch + 16px)` }"
+        @mouseover="onOver"
+        @mouseout="onOut"
+      >
       <tbody>
         <tr v-for="row in rows" :key="row.n" :id="`L${row.n}`">
           <td class="ln">{{ row.n }}</td>
@@ -137,7 +153,8 @@ function onOut(event) {
           </td>
         </tr>
       </tbody>
-    </table>
+      </table>
+    </div>
 
     <Teleport to="body">
       <div v-if="tip.show" class="coverage-tooltip" :style="tip.style">
@@ -155,6 +172,7 @@ function onOut(event) {
 <style scoped>
 .coverage-file {
   padding: 0 16px;
+  padding-left: calc(16px + var(--explorer-inset));
 }
 
 .back-link {
@@ -170,8 +188,21 @@ function onOut(event) {
   word-break: break-all;
 }
 
+.source-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+  /* Contains the sticky gutter cells below: they pin against this
+     scroller, not the viewport. */
+  position: relative;
+}
+
+/* `max-content` rather than 100%: the table is allowed to be as wide as its
+   widest line and let .source-scroll scroll, but `min-width: 100%` keeps
+   the row backgrounds spanning the full width on files narrower than the
+   viewport. */
 .coverage-source {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   font-family: 'Fira Code', var(--vp-font-family-mono);
   font-feature-settings: 'calt' 1, 'liga' 1, 'ss07' 1;
@@ -184,7 +215,17 @@ function onOut(event) {
   vertical-align: top;
 }
 
+/* Pinned while the code scrolls horizontally: the line number and the
+   coverage stripe are what the rest of the row is read against, and on a
+   file wide enough to need scrolling they would otherwise be the first
+   things to disappear. */
 .ln {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--vp-c-bg);
+  width: var(--gutter-width);
+  box-sizing: border-box;
   text-align: right;
   padding: 0 8px;
   color: var(--vp-c-text-3);
@@ -195,6 +236,10 @@ function onOut(event) {
 /* The coverage lane: 8px wide whatever it holds, so the code column keeps
    a straight left edge past lines that carry no coverage data. */
 .cov {
+  position: sticky;
+  left: var(--gutter-width);
+  z-index: 1;
+  background: var(--vp-c-bg);
   width: 8px;
   padding: 0;
   user-select: none;
