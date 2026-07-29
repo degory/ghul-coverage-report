@@ -24,3 +24,93 @@
   max-width: none;
   padding: 0;
 }
+
+/* FileExplorer.vue is a fixed-position sidebar sitting to the left of
+   everything else; push the nav bar and page content over by its width
+   (or the collapsed rail's width) rather than letting it overlap them.
+   The toggle in FileExplorer.vue mirrors its own collapsed state onto
+   this class on <html> so plain CSS can react without prop-drilling
+   through Layout.vue. */
+.VPNav, .VPPage {
+  margin-left: 280px;
+  transition: margin-left 0.15s ease;
+}
+
+html.explorer-collapsed .VPNav, html.explorer-collapsed .VPPage {
+  margin-left: 28px;
+}
+
+@media (max-width: 767px) {
+  .VPNav, .VPPage, html.explorer-collapsed .VPNav, html.explorer-collapsed .VPPage {
+    margin-left: 0;
+  }
+}
+
+/* Shared by FileExplorer.vue's outline mode and ExplorerDir.vue's
+   recursive file tree - kept global (not scoped) so both can use it. */
+.tree-node {
+  margin: 0;
+}
+
+.tree-label {
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tree-label:hover, .tree-leaf:hover {
+  background: var(--vp-c-bg-soft);
+}
+
+.tree-children {
+  margin-left: 14px;
+  border-left: 1px solid var(--vp-c-divider);
+  padding-left: 6px;
+}
+
+.tree-leaf {
+  padding: 2px 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-link {
+  color: var(--vp-c-text-1);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: 'Fira Code', var(--vp-font-family-mono);
+  font-feature-settings: 'calt' 1, 'liga' 1, 'ss07' 1;
+}
+
+.tree-link:hover {
+  color: var(--vp-c-brand-1);
+}
+
+.tree-link.active {
+  color: var(--vp-c-brand-1);
+  font-weight: 600;
+}
+
+.rate-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-left: auto;
+}
+
+.rate-high { background: #2ea043; }
+.rate-mid { background: #d29922; }
+.rate-low { background: #f85149; }

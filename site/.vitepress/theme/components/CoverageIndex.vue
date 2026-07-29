@@ -93,6 +93,32 @@ const sortedTypeRows = computed(() => {
   return [...typeRows.value].sort((a, b) => ascending ? a.rate - b.rate : b.rate - a.rate)
 })
 
+const fileRows = computed(() => {
+  const byFile = new Map()
+  for (const row of typeRows.value) {
+    if (!byFile.has(row.file)) {
+      byFile.set(row.file, {
+        file: row.file,
+        linesCovered: 0,
+        linesValid: 0,
+        branchesCovered: 0,
+        branchesValid: 0,
+      })
+    }
+    const f = byFile.get(row.file)
+    f.linesCovered += row.linesCovered
+    f.linesValid += row.linesValid
+    f.branchesCovered += row.branchesCovered
+    f.branchesValid += row.branchesValid
+  }
+  return [...byFile.values()].map(f => ({ ...f, rate: rate(f.linesCovered, f.linesValid) }))
+})
+
+const sortedFileRows = computed(() => {
+  const ascending = view.value === 'file-asc'
+  return [...fileRows.value].sort((a, b) => ascending ? a.rate - b.rate : b.rate - a.rate)
+})
+
 const groupedMethodRows = computed(() => {
   const dir = view.value === 'method-asc' ? 1 : -1
   const rows = [...methodRows.value].sort((a, b) => dir * (a.rate - b.rate))
@@ -142,6 +168,8 @@ const branchRate = computed(() => rate(totals.value.branchesCovered, totals.valu
         <option value="type-asc">By type, ascending</option>
         <option value="method-desc">By method, grouped by namespace/type, descending</option>
         <option value="method-asc">By method, grouped by namespace/type, ascending</option>
+        <option value="file-desc">By file, descending</option>
+        <option value="file-asc">By file, ascending</option>
       </select>
     </label>
 
@@ -153,6 +181,19 @@ const branchRate = computed(() => rate(totals.value.branchesCovered, totals.valu
         <tr v-for="row in sortedTypeRows" :key="row.namespace + '.' + row.type">
           <td><a :href="fileLink(row.file, row.startLine)">{{ row.type }}</a></td>
           <td>{{ row.namespace }}</td>
+          <td>{{ pct(row.rate) }} ({{ row.linesCovered }}/{{ row.linesValid }})</td>
+          <td>{{ row.branchesValid ? pct(row.branchesCovered / row.branchesValid) : '—' }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <table v-else-if="view === 'file-desc' || view === 'file-asc'" class="coverage-table">
+      <thead>
+        <tr><th>File</th><th>Lines</th><th>Branches</th></tr>
+      </thead>
+      <tbody>
+        <tr v-for="row in sortedFileRows" :key="row.file">
+          <td class="mono-cell"><a :href="fileLink(row.file)">{{ row.file }}</a></td>
           <td>{{ pct(row.rate) }} ({{ row.linesCovered }}/{{ row.linesValid }})</td>
           <td>{{ row.branchesValid ? pct(row.branchesCovered / row.branchesValid) : '—' }}</td>
         </tr>
@@ -232,6 +273,12 @@ const branchRate = computed(() => rate(totals.value.branchesCovered, totals.valu
   text-align: left;
   padding: 4px 8px;
   border-bottom: 1px solid var(--vp-c-divider);
+}
+
+.mono-cell {
+  font-family: 'Fira Code', var(--vp-font-family-mono);
+  font-feature-settings: 'calt' 1, 'liga' 1, 'ss07' 1;
+  font-size: 13px;
 }
 
 .method-group h3 {
