@@ -12,6 +12,7 @@ namespace Coverage.Output is
     use Coverage.Model.NAMESPACE_COVERAGE;
     use Cobertura.LINE_COVERAGE;
     use Analysis.Protocol.SEMANTIC_TOKEN;
+    use Analysis.Protocol.HOVER_ENTRY;
 
     // Writes `summary.json` (the namespace -> type -> method rollup tree)
     // and one `files/<path>.json` per source file (its lines, each with
@@ -30,12 +31,13 @@ namespace Coverage.Output is
             namespaces: LIST[NAMESPACE_COVERAGE],
             file_lines: MAP[string, MAP[int, LINE_COVERAGE]],
             file_contents: MAP[string, string],
-            file_tokens: MAP[string, LIST[SEMANTIC_TOKEN]]
+            file_tokens: MAP[string, LIST[SEMANTIC_TOKEN]],
+            file_hovers: MAP[string, LIST[HOVER_ENTRY]]
         ) is
             Directory.create_directory(target_directory);
 
             _write_summary(target_directory, namespaces);
-            _write_files(target_directory, file_lines, file_contents, file_tokens);
+            _write_files(target_directory, file_lines, file_contents, file_tokens, file_hovers);
         si
 
         _write_summary(target_directory: string, namespaces: LIST[NAMESPACE_COVERAGE]) is
@@ -99,7 +101,8 @@ namespace Coverage.Output is
             target_directory: string,
             file_lines: MAP[string, MAP[int, LINE_COVERAGE]],
             file_contents: MAP[string, string],
-            file_tokens: MAP[string, LIST[SEMANTIC_TOKEN]]
+            file_tokens: MAP[string, LIST[SEMANTIC_TOKEN]],
+            file_hovers: MAP[string, LIST[HOVER_ENTRY]]
         ) is
             let files_directory = Path.combine(target_directory, "files");
 
@@ -145,7 +148,20 @@ namespace Coverage.Output is
                     od
                 fi
 
-                let file_dto = FILE_DTO(path, line_dtos, token_dtos);
+                let hover_dtos = LIST[HOVER_DTO]();
+
+                if file_hovers.contains_key(path) then
+                    for hover in file_hovers[path] do
+                        hover_dtos.add(
+                            HOVER_DTO(
+                                hover.start_line, hover.start_column, hover.end_line, hover.end_column,
+                                hover.description, hover.kind_label
+                            )
+                        );
+                    od
+                fi
+
+                let file_dto = FILE_DTO(path, line_dtos, token_dtos, hover_dtos);
                 let output_path = Path.combine(files_directory, "{path}.json");
 
                 Directory.create_directory(Path.get_directory_name(output_path)!);

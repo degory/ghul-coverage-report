@@ -1,11 +1,24 @@
 <script setup>
-// `line.segments` (colour + semantic-token runs) is computed at build time
-// by ../../.vitepress/highlight.mjs, ported from ghul-dev's GhulExample.vue
-// / ghulExampleDataPlugin - see that file for the origin note. This
-// component just renders the already-merged runs plus the coverage gutter.
-defineProps({
+// `line.segments` (colour + semantic-token + hover runs) is computed at
+// build time by ../../.vitepress/highlight.mjs, ported from ghul-dev's
+// GhulExample.vue / ghulExampleDataPlugin - see that file for the origin
+// note. This component renders the already-merged runs plus the coverage
+// gutter, and the hover tooltip (also ported from GhulExample.vue).
+//
+// Renders text runs with CSS `white-space: pre` rather than an actual
+// `<pre>` tag, deliberately: Vue's template compiler only special-cases
+// whitespace preservation for the literal `<pre>`/`<textarea>` tags, so a
+// styled `<div>` still gets normal whitespace-condensing on the *template
+// source* (safe to format normally) while still rendering the *data*
+// (each segment's own text) literally via the CSS property.
+import { ref } from 'vue'
+
+const props = defineProps({
   path: { type: String, required: true },
   lines: { type: Array, required: true },
+  // Deduplicated {kindLabel, signatureLines} table; each segment carries
+  // just the small integer index into it (see paths.js's buildHoverTable).
+  hovers: { type: Array, default: () => [] },
 })
 
 function lineClass(line) {
@@ -16,6 +29,47 @@ function lineClass(line) {
 function branchLabel(line) {
   if (line.branchTotal == null) return ''
   return `${line.branchCovered}/${line.branchTotal}`
+}
+
+// A single shared tooltip, teleported to <body> and positioned fixed, so
+// it's never clipped by the table's overflow.
+const tip = ref({ show: false, signatureLines: [], kindLabel: '', style: {} })
+
+function place(event) {
+  const rect = event.currentTarget.getBoundingClientRect()
+  const maxWidth = 640
+
+  const style = {
+    left: Math.max(8, Math.min(rect.left, window.innerWidth - maxWidth - 16)) + 'px',
+  }
+
+  if (rect.bottom + 220 > window.innerHeight) {
+    style.bottom = (window.innerHeight - rect.top + 6) + 'px'
+  } else {
+    style.top = (rect.bottom + 6) + 'px'
+  }
+
+  return style
+}
+
+function onEnter(event, segment) {
+  if (segment.hoverIndex == null) return
+
+  const hover = props.hovers[segment.hoverIndex]
+  if (!hover) return
+
+  tip.value = {
+    show: true,
+    signatureLines: hover.signatureLines ?? [],
+    kindLabel: hover.kindLabel ?? '',
+    style: place(event),
+  }
+}
+
+function onLeave(segment) {
+  if (segment.hoverIndex != null) {
+    tip.value = { ...tip.value, show: false }
+  }
 }
 </script>
 
@@ -28,10 +82,36 @@ function branchLabel(line) {
           <td class="ln">{{ line.number }}</td>
           <td class="hits">{{ line.hits ?? '' }}</td>
           <td class="branch">{{ branchLabel(line) }}</td>
-          <td class="text"><pre><span v-for="(segment, i) in line.segments" :key="i" :style="segment.style" :class="[segment.semanticType ? 'ghul-sem-' + segment.semanticType : null, segment.semanticStatic ? 'ghul-sem-mod-static' : null]">{{ segment.text }}</span></pre></td>
+          <td class="text">
+            <div class="line-text">
+              <span
+                v-for="(segment, i) in line.segments"
+                :key="i"
+                :style="segment.style"
+                :class="[
+                  segment.semanticType ? 'ghul-sem-' + segment.semanticType : null,
+                  segment.semanticStatic ? 'ghul-sem-mod-static' : null,
+                  { 'has-hover': segment.hoverIndex != null },
+                ]"
+                @mouseenter="onEnter($event, segment)"
+                @mouseleave="onLeave(segment)"
+              >{{ segment.text }}</span>
+            </div>
+          </td>
         </tr>
       </tbody>
     </table>
+
+    <Teleport to="body">
+      <div v-if="tip.show" class="coverage-tooltip" :style="tip.style">
+        <div class="tooltip-signature">
+          <div v-for="(sigLine, li) in tip.signatureLines" :key="li" class="line-text">
+            <span v-for="(tok, ti) in sigLine" :key="ti" :style="tok.style">{{ tok.text }}</span>
+          </div>
+        </div>
+        <div v-if="tip.kindLabel" class="tooltip-kind">{{ tip.kindLabel }}</div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -63,9 +143,14 @@ function branchLabel(line) {
   width: 100%;
 }
 
-.text pre {
-  margin: 0;
+.line-text {
   white-space: pre;
+}
+
+.has-hover {
+  cursor: help;
+  text-decoration: underline dotted rgba(128, 128, 128, 0.6);
+  text-underline-offset: 3px;
 }
 
 .cov-hit {
@@ -74,6 +159,27 @@ function branchLabel(line) {
 
 .cov-miss {
   background: rgba(248, 81, 73, 0.15);
+}
+
+.coverage-tooltip {
+  position: fixed;
+  z-index: 100;
+  max-width: 640px;
+  background: var(--vp-c-bg-elv);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 6px;
+  padding: 8px 12px;
+  box-shadow: var(--vp-shadow-3);
+  font-family: var(--vp-font-family-mono);
+  font-size: 13px;
+}
+
+.tooltip-kind {
+  margin-top: 4px;
+  font-style: italic;
+  color: var(--vp-c-text-2);
+  font-family: var(--vp-font-family-base);
+  font-size: 12px;
 }
 
 /* Ported from ghul-dev's src/.vitepress/theme/components/GhulExample.vue

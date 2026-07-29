@@ -17,6 +17,7 @@ namespace Coverage.Session is
     use Analysis.Protocol.Response;
     use Analysis.Protocol.SYMBOL_FILE;
     use Analysis.Protocol.SEMANTIC_TOKEN;
+    use Analysis.Protocol.HOVER_ENTRY;
 
     // Drives a `dotnet ghul-compiler --analyse` subprocess pointed at an
     // arbitrary target project directory (not this tool's own project —
@@ -171,6 +172,20 @@ namespace Coverage.Session is
             fi
 
             throw Exception("expected a semantic_tokens response, got a different Response variant");
+        si
+
+        // Like SEMANTIC_TOKENS, one call per file - every hoverable span in
+        // the file at once, not point-queried.
+        hover_map(path: string) -> LIST[HOVER_ENTRY] is
+            write_request(Request.HOVER_MAP(path));
+
+            let response = read_query_response();
+
+            if let hovers: Response.HOVER_MAP = response then
+                return hovers.entries;
+            fi
+
+            throw Exception("expected a hover_map response, got a different Response variant");
         si
 
         // A query command falls through to a compile_all when the queried

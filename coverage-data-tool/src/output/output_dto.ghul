@@ -29,5 +29,8 @@ namespace Coverage.Output is
     // GhulExample.vue merge logic needs no adaptation.
     class TOKEN_DTO(start_line: int, start_column: int, end_line: int, end_column: int, token_type: string, modifiers: string);
 
-    class FILE_DTO(path: string, lines: LIST[LINE_DTO], semantic_tokens: LIST[TOKEN_DTO]);
+    // Mirrors ghul-dev's example-data WIRE_HOVER_ENTRY shape.
+    class HOVER_DTO(start_line: int, start_column: int, end_line: int, end_column: int, description: string, kind_label: string?);
+
+    class FILE_DTO(path: string, lines: LIST[LINE_DTO], semantic_tokens: LIST[TOKEN_DTO], hovers: LIST[HOVER_DTO]);
 si
