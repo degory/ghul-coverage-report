@@ -9,7 +9,7 @@ namespace Coverage.Output is
     );
 
     class TYPE_DTO(
-        name: string, file: string,
+        name: string, file: string, start_line: int,
         lines_covered: int, lines_valid: int, branches_covered: int, branches_valid: int,
         methods: LIST[METHOD_DTO]
     );

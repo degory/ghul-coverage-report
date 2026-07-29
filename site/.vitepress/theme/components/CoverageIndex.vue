@@ -27,6 +27,7 @@ const typeRows = computed(() => {
         namespace: ns.name,
         type: t.name || '(global functions)',
         file: t.file,
+        startLine: t.startLine,
         linesCovered: t.linesCovered,
         linesValid: t.linesValid,
         branchesCovered: t.branchesCovered,
@@ -145,7 +146,7 @@ const branchRate = computed(() => rate(totals.value.branchesCovered, totals.valu
       </thead>
       <tbody>
         <tr v-for="row in sortedTypeRows" :key="row.namespace + '.' + row.type">
-          <td><a :href="`/files/${slugFor(row.file)}`">{{ row.type }}</a></td>
+          <td><a :href="`/files/${slugFor(row.file)}${row.startLine ? '#L' + row.startLine : ''}`">{{ row.type }}</a></td>
           <td>{{ row.namespace }}</td>
           <td>{{ pct(row.rate) }} ({{ row.linesCovered }}/{{ row.linesValid }})</td>
           <td>{{ row.branchesValid ? pct(row.branchesCovered / row.branchesValid) : '—' }}</td>
@@ -170,6 +171,20 @@ const branchRate = computed(() => rate(totals.value.branchesCovered, totals.valu
 </template>
 
 <style scoped>
+.coverage-index {
+  padding: 0 24px;
+}
+
+.coverage-index a {
+  text-decoration: underline;
+  text-decoration-color: var(--vp-c-divider);
+  text-underline-offset: 2px;
+}
+
+.coverage-index a:hover {
+  text-decoration-color: currentColor;
+}
+
 .headline {
   display: flex;
   gap: 16px;

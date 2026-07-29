@@ -43,13 +43,26 @@ namespace Coverage.Model is
         name: string;
         namespace_name: string;
         file: string;
+        // The type declaration's own line, when a matching type-kind
+        // symbol was found in its file (see TREE_BUILDER); 0 otherwise -
+        // used as the source-page scroll target for a "jump to this type"
+        // link, so it should point at `class FOO is`, not just whichever
+        // method happens to be first.
+        start_line: int field;
         methods: LIST[METHOD_COVERAGE];
 
         init(name: string, namespace_name: string, file: string) is
             self.name = name;
             self.namespace_name = namespace_name;
             self.file = file;
+            start_line = 0;
             methods = LIST[METHOD_COVERAGE]();
+        si
+
+        set_start_line(line: int) is
+            if start_line == 0 then
+                start_line = line;
+            fi
         si
 
         find_or_add_method(name: string, file: string, start_line: int) -> METHOD_COVERAGE is

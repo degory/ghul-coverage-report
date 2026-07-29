@@ -65,7 +65,7 @@ namespace Coverage.Output is
 
                     type_dtos.add(
                         TYPE_DTO(
-                            t.name, t.file,
+                            t.name, t.file, t.start_line,
                             t.lines_covered, t.lines_valid, t.branches_covered, t.branches_valid,
                             method_dtos
                         )

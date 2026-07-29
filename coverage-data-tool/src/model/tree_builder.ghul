@@ -16,6 +16,9 @@ namespace Coverage.Model is
     is_member_kind(kind: int) -> bool =>
         kind == 6 \/ kind == 7 \/ kind == 9 \/ kind == 12; // method, property, constructor, function
 
+    is_type_kind(kind: int) -> bool =>
+        kind == 5 \/ kind == 23 \/ kind == 11 \/ kind == 10; // class, struct, interface, enum
+
     // Builds the namespace -> type -> method coverage tree from the
     // analyser's whole-project SYMBOLS response and the merged
     // per-(file, line) Cobertura data: every measured line is attributed to
@@ -68,7 +71,31 @@ namespace Coverage.Model is
                 od
             od
 
+            _set_type_start_lines(symbol_files, types);
+
             return _group_by_namespace(types);
+        si
+
+        // A type's own declaration line (`class FOO is`) doesn't come from
+        // the line-attribution loop above - that only sees the
+        // method/property/constructor/function symbols lines get
+        // attributed to. Take a separate pass over the type-kind symbols
+        // to fill in TYPE_COVERAGE.start_line for whichever types the
+        // first pass actually created (a type with no measured coverage
+        // never gets a TYPE_COVERAGE at all, so this only ever narrows the
+        // existing entries, never adds new ones).
+        _set_type_start_lines(symbol_files: LIST[SYMBOL_FILE], types: MAP[string, TYPE_COVERAGE]) is
+            for symbol_file in symbol_files do
+                for symbol in symbol_file.symbols do
+                    if is_type_kind(symbol.kind) then
+                        let type_key = "{symbol.qualifier}|{_leading_identifier(symbol.search_description)}";
+
+                        if types.contains_key(type_key) then
+                            types[type_key].set_start_line(symbol.start_line);
+                        fi
+                    fi
+                od
+            od
         si
 
         _innermost_owner(members: LIST[SYMBOL_DTO], line: int) -> OWNER_MATCH? is

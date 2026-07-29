@@ -90,6 +90,7 @@ function onLeave(segment) {
                 :key="i"
                 :style="segment.style"
                 :class="[
+                  'ghul-tok',
                   segment.semanticType ? 'ghul-sem-' + segment.semanticType : null,
                   segment.semanticStatic ? 'ghul-sem-mod-static' : null,
                   { 'has-hover': segment.hoverIndex != null },
@@ -107,7 +108,7 @@ function onLeave(segment) {
       <div v-if="tip.show" class="coverage-tooltip" :style="tip.style">
         <div class="tooltip-signature">
           <div v-for="(sigLine, li) in tip.signatureLines" :key="li" class="line-text">
-            <span v-for="(tok, ti) in sigLine" :key="ti" :style="tok.style">{{ tok.text }}</span>
+            <span v-for="(tok, ti) in sigLine" :key="ti" class="ghul-tok" :style="tok.style">{{ tok.text }}</span>
           </div>
         </div>
         <div v-if="tip.kindLabel" class="tooltip-kind">{{ tip.kindLabel }}</div>
@@ -117,6 +118,10 @@ function onLeave(segment) {
 </template>
 
 <style scoped>
+.coverage-file {
+  padding: 0 16px;
+}
+
 .back-link {
   display: inline-block;
   margin-bottom: 12px;
@@ -162,6 +167,19 @@ function onLeave(segment) {
      the row collapses shorter than its neighbours without this - blank
      source lines are common enough to matter. */
   min-height: 1.5em;
+}
+
+/* Shiki's tokens carry colour as CSS custom properties (`--shiki-light` /
+   `--shiki-dark`) rather than a `color` directly, so the same markup can
+   answer both themes - the theme has to actually consume them somewhere.
+   `.ghul-sem-*` below overrides this with a `color` of its own for
+   identifiers the semantic-token overlay covers. */
+.ghul-tok {
+  color: var(--shiki-light);
+}
+
+.dark .ghul-tok {
+  color: var(--shiki-dark);
 }
 
 .has-hover {

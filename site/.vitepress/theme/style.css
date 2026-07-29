@@ -15,8 +15,12 @@
    default `doc` layout, which caps its content column at ~752px for
    reading-width prose. `page` layout has no such cap on its own, but
    still sits inside VPPage's default padding; widen that to use most of
-   the viewport instead. */
+   the viewport instead. Each page component sets its own left/right
+   padding on top of this (CoverageFile.vue's smaller than
+   CoverageIndex.vue's - source code wants to use as much width as
+   possible, the report table reads better with a bit more breathing
+   room). */
 .VPPage .vp-page {
   max-width: none;
-  padding: 0 24px;
+  padding: 0;
 }
