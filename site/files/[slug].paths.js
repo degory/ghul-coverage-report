@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
-import { tokenizeLines, tokenizeSignature } from '../.vitepress/highlight.mjs'
+import { tokenizeLines, tokenizeSignature, createStylePalette } from '../.vitepress/highlight.mjs'
 
 // coverage-data-tool writes one JSON file per source file under
 // site/coverage-data/files/, mirroring the project's own directory
@@ -42,7 +42,7 @@ function walk(dir, out) {
 // same index, and then push out of order, silently scrambling which
 // description ended up at which index (surfaced as most hovers in a file
 // showing one arbitrary, unrelated entry's text).
-async function buildHoverTable(hovers) {
+async function buildHoverTable(hovers, palette) {
   const keyOf = h => `${h.kindLabel ?? ''}|||${h.description ?? ''}`
 
   const indexByKey = new Map()
@@ -58,7 +58,7 @@ async function buildHoverTable(hovers) {
 
   const table = await Promise.all(uniqueEntries.map(async h => ({
     kindLabel: h.kindLabel ?? '',
-    signatureLines: await tokenizeSignature(h.description ?? ''),
+    signatureLines: await tokenizeSignature(h.description ?? '', palette),
   })))
 
   const spans = (hovers ?? []).map(h => ({
@@ -81,13 +81,22 @@ export default {
       const data = JSON.parse(readFileSync(jsonPath, 'utf-8'))
       const code = data.lines.map(l => l.text).join('\n')
 
-      const { table: hoverTable, spans: hoverSpans } = await buildHoverTable(data.hovers)
-      const colourLines = await tokenizeLines(code, data.semanticTokens, hoverSpans)
+      const palette = createStylePalette()
+      const { table: hoverTable, spans: hoverSpans } = await buildHoverTable(data.hovers, palette)
+      const colourLines = await tokenizeLines(code, data.semanticTokens, hoverSpans, palette)
 
-      const enrichedLines = data.lines.map((line, i) => ({
-        ...line,
-        segments: colourLines[i] ?? [{ text: line.text, style: null, semanticType: null, semanticStatic: false, hoverIndex: null }],
-      }))
+      // Same terse-and-absent-when-empty treatment as the segments: one of
+      // these per source line, and `hits`/branch counts are null on the
+      // majority of lines (blank lines, comments, declarations).
+      const enrichedLines = data.lines.map((line, i) => {
+        const out = { n: line.number, g: colourLines[i] ?? [{ t: line.text }] }
+        if (line.hits != null) out.h = line.hits
+        if (line.branchTotal != null) {
+          out.bc = line.branchCovered
+          out.bt = line.branchTotal
+        }
+        return out
+      })
 
       const slug = data.path.replace(/\//g, '__').replace(/\.ghul$/, '')
 
@@ -97,6 +106,7 @@ export default {
           path: data.path,
           linesJson: JSON.stringify(enrichedLines),
           hoversJson: JSON.stringify(hoverTable),
+          stylesJson: JSON.stringify(palette.list),
         },
       }
     }))

@@ -1,9 +1,9 @@
 <script setup>
-// `line.segments` (colour + semantic-token + hover runs) is computed at
-// build time by ../../.vitepress/highlight.mjs, ported from ghul-dev's
+// Each line's segments (colour + semantic-token + hover runs) are computed
+// at build time by ../../.vitepress/highlight.mjs, ported from ghul-dev's
 // GhulExample.vue / ghulExampleDataPlugin - see that file for the origin
 // note. This component renders the already-merged runs plus the coverage
-// gutter, and the hover tooltip (also ported from GhulExample.vue).
+// stripe, and the hover tooltip (also ported from GhulExample.vue).
 //
 // Renders text runs with CSS `white-space: pre` rather than an actual
 // `<pre>` tag, deliberately: Vue's template compiler only special-cases
@@ -11,26 +11,60 @@
 // styled `<div>` still gets normal whitespace-condensing on the *template
 // source* (safe to format normally) while still rendering the *data*
 // (each segment's own text) literally via the CSS property.
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { withBase } from 'vitepress'
 
 const props = defineProps({
   path: { type: String, required: true },
+  // Terse per-line shape from files/[slug].paths.js: {n, g[, h, bc, bt]},
+  // segments {t[, s, c, h]} - see highlight.mjs's mergeLine for the key
+  // meanings and why they're spelled this short.
   lines: { type: Array, required: true },
   // Deduplicated {kindLabel, signatureLines} table; each segment carries
   // just the small integer index into it (see paths.js's buildHoverTable).
   hovers: { type: Array, default: () => [] },
+  // Interned {--shiki-light, --shiki-dark} pairs; a segment's `s` indexes
+  // into this (see highlight.mjs's createStylePalette).
+  styles: { type: Array, default: () => [] },
 })
 
-function lineClass(line) {
-  if (line.hits == null) return 'cov-na'
-  return line.hits > 0 ? 'cov-hit' : 'cov-miss'
+// Coverage is a thin stripe in its own narrow lane, never a tint on the
+// code, and the counts live in the stripe's tooltip rather than in columns
+// of their own. Syntax highlighting and hovers are untouched by any of it -
+// they apply to every line regardless of coverage.
+//
+// Three states, matching what the data can actually distinguish:
+//   miss     the line was instrumented and never ran
+//   partial  it ran, but not every branch on it did
+//   hit      it ran, and every branch on it did (or it has none)
+// A line with no `h` at all is not instrumented - a comment, a blank, a
+// declaration that emits no code - and gets no stripe. The lane still
+// occupies its width so the code column stays aligned down the file.
+function covClass(line) {
+  if (line.h == null) return null
+  if (line.h === 0) return 'cov-miss'
+  return line.bt != null && line.bc < line.bt ? 'cov-part' : 'cov-hit'
 }
 
-function branchLabel(line) {
-  if (line.branchTotal == null) return ''
-  return `${line.branchCovered}/${line.branchTotal}`
+function covTitle(line) {
+  if (line.h == null) return null
+
+  const visits = line.h === 1 ? '1 visit' : `${line.h} visits`
+  const branches = line.bt != null ? `, ${line.bc} of ${line.bt} branches` : ''
+
+  if (line.h === 0) return `Not covered${line.bt != null ? ` (0 of ${line.bt} branches)` : ''}`
+  return `Covered - ${visits}${branches}`
 }
+
+// Precomputed once per file rather than per render: these are pure
+// functions of immutable props, and the largest source files here run to
+// several thousand lines.
+const rows = computed(() => props.lines.map(line => ({
+  n: line.n,
+  g: line.g,
+  cov: covClass(line),
+  title: covTitle(line),
+})))
 
 // A single shared tooltip, teleported to <body> and positioned fixed, so
 // it's never clipped by the table's overflow.
@@ -53,22 +87,29 @@ function place(event) {
   return style
 }
 
-function onEnter(event, segment) {
-  if (segment.hoverIndex == null) return
+// One delegated listener pair on the table, rather than a handler bound to
+// each span: a large source file runs to several thousand segments, and
+// binding enter/leave per span made that ~10k listeners on a page whose
+// hover targets are a small minority of them. The index rides on a
+// data-attribute so the delegated handler can recover it from the event
+// target alone.
+function onOver(event) {
+  const span = event.target.closest?.('span[data-h]')
+  if (!span) return
 
-  const hover = props.hovers[segment.hoverIndex]
+  const hover = props.hovers[Number(span.dataset.h)]
   if (!hover) return
 
   tip.value = {
     show: true,
     signatureLines: hover.signatureLines ?? [],
     kindLabel: hover.kindLabel ?? '',
-    style: place(event),
+    style: place({ currentTarget: span }),
   }
 }
 
-function onLeave(segment) {
-  if (segment.hoverIndex != null) {
+function onOut(event) {
+  if (event.target.closest?.('span[data-h]')) {
     tip.value = { ...tip.value, show: false }
   }
 }
@@ -76,29 +117,22 @@ function onLeave(segment) {
 
 <template>
   <div class="coverage-file">
-    <a class="back-link" :href="withBase('/')">&larr; Back to report</a>
+    <a class="back-link" :href="withBase('/')">&larr; Back</a>
     <h1 class="file-path">{{ path }}</h1>
-    <table class="coverage-source">
+    <table class="coverage-source" @mouseover="onOver" @mouseout="onOut">
       <tbody>
-        <tr v-for="line in lines" :key="line.number" :id="`L${line.number}`" :class="lineClass(line)">
-          <td class="ln">{{ line.number }}</td>
-          <td class="hits">{{ line.hits ?? '' }}</td>
-          <td class="branch">{{ branchLabel(line) }}</td>
+        <tr v-for="row in rows" :key="row.n" :id="`L${row.n}`">
+          <td class="ln">{{ row.n }}</td>
+          <td class="cov"><span :class="row.cov" :title="row.title"></span></td>
           <td class="text">
             <div class="line-text">
               <span
-                v-for="(segment, i) in line.segments"
+                v-for="(segment, i) in row.g"
                 :key="i"
-                :style="segment.style"
-                :class="[
-                  'ghul-tok',
-                  segment.semanticType ? 'ghul-sem-' + segment.semanticType : null,
-                  segment.semanticStatic ? 'ghul-sem-mod-static' : null,
-                  { 'has-hover': segment.hoverIndex != null },
-                ]"
-                @mouseenter="onEnter($event, segment)"
-                @mouseleave="onLeave(segment)"
-              >{{ segment.text }}</span>
+                :style="segment.s != null ? styles[segment.s] : null"
+                :class="['ghul-tok', segment.c]"
+                :data-h="segment.h"
+              >{{ segment.t }}</span>
             </div>
           </td>
         </tr>
@@ -109,7 +143,7 @@ function onLeave(segment) {
       <div v-if="tip.show" class="coverage-tooltip" :style="tip.style">
         <div class="tooltip-signature">
           <div v-for="(sigLine, li) in tip.signatureLines" :key="li" class="line-text">
-            <span v-for="(tok, ti) in sigLine" :key="ti" class="ghul-tok" :style="tok.style">{{ tok.text }}</span>
+            <span v-for="(tok, ti) in sigLine" :key="ti" class="ghul-tok" :style="tok.s != null ? styles[tok.s] : null">{{ tok.t }}</span>
           </div>
         </div>
         <div v-if="tip.kindLabel" class="tooltip-kind">{{ tip.kindLabel }}</div>
@@ -145,17 +179,32 @@ function onLeave(segment) {
   line-height: 1.5;
 }
 
-.ln, .hits, .branch, .text {
+.ln, .cov, .text {
   line-height: 1.5;
   vertical-align: top;
 }
 
-.ln, .hits, .branch {
+.ln {
   text-align: right;
   padding: 0 8px;
   color: var(--vp-c-text-3);
   user-select: none;
   white-space: nowrap;
+}
+
+/* The coverage lane: 8px wide whatever it holds, so the code column keeps
+   a straight left edge past lines that carry no coverage data. */
+.cov {
+  width: 8px;
+  padding: 0;
+  user-select: none;
+}
+
+.cov > span {
+  display: block;
+  width: 4px;
+  height: 1.5em;
+  margin: 0 2px;
 }
 
 .text {
@@ -183,16 +232,29 @@ function onLeave(segment) {
   color: var(--shiki-dark);
 }
 
-.has-hover {
+.ghul-tok[data-h] {
   cursor: default;
 }
 
 .cov-hit {
-  background: rgba(46, 160, 67, 0.15);
+  background: #2ea043;
 }
 
 .cov-miss {
-  background: rgba(248, 81, 73, 0.15);
+  background: #f85149;
+}
+
+/* Partial gets a hatch as well as its own hue - the three states have to
+   stay distinguishable in greyscale and to a colour-blind reader, and this
+   is the one that would otherwise read as "some shade of covered". */
+.cov-part {
+  background: repeating-linear-gradient(
+    45deg,
+    #d29922,
+    #d29922 2px,
+    rgba(210, 153, 34, 0.35) 2px,
+    rgba(210, 153, 34, 0.35) 4px
+  );
 }
 
 .coverage-tooltip {

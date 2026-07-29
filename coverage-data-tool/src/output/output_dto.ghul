@@ -4,7 +4,7 @@ namespace Coverage.Output is
     class TOTALS_DTO(lines_covered: int, lines_valid: int, branches_covered: int, branches_valid: int);
 
     class METHOD_DTO(
-        name: string, file: string, start_line: int,
+        name: string, signature: string, file: string, start_line: int,
         lines_covered: int, lines_valid: int, branches_covered: int, branches_valid: int
     );
 

@@ -6,6 +6,10 @@ namespace Coverage.Model is
     // fall inside the symbol's own span.
     class METHOD_COVERAGE is
         name: string;
+        // The analyser's full description of the declaration. `name` alone
+        // does not distinguish overloads, which a report has to list
+        // separately because they are covered separately.
+        signature: string;
         file: string;
         start_line: int;
         lines_covered: int field;
@@ -13,8 +17,9 @@ namespace Coverage.Model is
         branches_covered: int field;
         branches_valid: int field;
 
-        init(name: string, file: string, start_line: int) is
+        init(name: string, signature: string, file: string, start_line: int) is
             self.name = name;
+            self.signature = signature;
             self.file = file;
             self.start_line = start_line;
             lines_covered = 0;
@@ -65,14 +70,14 @@ namespace Coverage.Model is
             fi
         si
 
-        find_or_add_method(name: string, file: string, start_line: int) -> METHOD_COVERAGE is
+        find_or_add_method(name: string, signature: string, file: string, start_line: int) -> METHOD_COVERAGE is
             for m in methods do
                 if m.name =~ name /\ m.start_line == start_line then
                     return m;
                 fi
             od
 
-            let created = METHOD_COVERAGE(name, file, start_line);
+            let created = METHOD_COVERAGE(name, signature, file, start_line);
             methods.add(created);
             return created;
         si

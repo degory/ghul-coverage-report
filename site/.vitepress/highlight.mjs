@@ -24,6 +24,32 @@ const grammar = JSON.parse(
   readFileSync(fileURLToPath(new URL('./ghul.tmLanguage.json', import.meta.url)), 'utf-8'),
 )
 
+// A whole file draws on a handful of distinct colours, but Shiki hands
+// back the full {--shiki-light, --shiki-dark} pair on every token - and
+// each page's data is baked into its own JS module as an escaped JSON
+// string, so every repeat costs twice over in escaping. Interning them
+// into a per-page table and carrying a small integer on each segment is
+// the same trick buildHoverTable already applies to hover descriptions in
+// files/[slug].paths.js, for the same reason.
+export function createStylePalette() {
+  const indexByKey = new Map()
+  const list = []
+
+  return {
+    idFor(style) {
+      if (!style) return null
+
+      const key = JSON.stringify(style)
+      if (!indexByKey.has(key)) {
+        indexByKey.set(key, list.length)
+        list.push(style)
+      }
+      return indexByKey.get(key)
+    },
+    list,
+  }
+}
+
 let highlighterPromise = null
 
 function getHighlighter() {
@@ -36,11 +62,11 @@ function getHighlighter() {
   return highlighterPromise
 }
 
-// Returns one array of {text, style, semanticType, semanticStatic, hover}
-// per line of `code`, aligned 1:1 with `code.split('\n')`. `hover`, when
-// present, already carries its tokenised `signatureLines` (see
-// tokenizeSignature below) - ready for the tooltip to render directly.
-export async function tokenizeLines(code, semanticTokens, hovers) {
+// Returns one array of segments per line of `code`, aligned 1:1 with
+// `code.split('\n')`. Segment keys are terse and absent-when-empty because
+// they repeat once per token across the whole file - see the segment shape
+// documented on mergeLine.
+export async function tokenizeLines(code, semanticTokens, hovers, palette) {
   const highlighter = await getHighlighter()
 
   const { tokens } = highlighter.codeToTokens(code, {
@@ -49,7 +75,7 @@ export async function tokenizeLines(code, semanticTokens, hovers) {
     defaultColor: false,
   })
 
-  return tokens.map((lineTokens, i) => mergeLine(lineTokens, i + 1, semanticTokens ?? [], hovers ?? []))
+  return tokens.map((lineTokens, i) => mergeLine(lineTokens, i + 1, semanticTokens ?? [], hovers ?? [], palette))
 }
 
 // A hover's `description` is itself ghūl and is rendered in the tooltip as
@@ -59,25 +85,51 @@ export async function tokenizeLines(code, semanticTokens, hovers) {
 // re-tokenise the same handful of strings hundreds of thousands of times.
 const signatureCache = new Map()
 
-export async function tokenizeSignature(text) {
-  if (signatureCache.has(text)) {
-    return signatureCache.get(text)
+// The cache holds raw {text, style} tokens rather than palette indices:
+// it lives for the whole build while a palette is per-page, so the index
+// is resolved per call and only the tokenizing is shared.
+export async function tokenizeSignature(text, palette) {
+  let raw = signatureCache.get(text)
+
+  if (!raw) {
+    const highlighter = await getHighlighter()
+
+    const { tokens } = highlighter.codeToTokens(text, {
+      lang: 'ghul',
+      themes: { light: 'light-plus', dark: 'dark-plus' },
+      defaultColor: false,
+    })
+
+    raw = tokens.map(lineTokens => lineTokens.map(t => ({ text: t.content, style: t.htmlStyle ?? null })))
+    signatureCache.set(text, raw)
   }
 
-  const highlighter = await getHighlighter()
-
-  const { tokens } = highlighter.codeToTokens(text, {
-    lang: 'ghul',
-    themes: { light: 'light-plus', dark: 'dark-plus' },
-    defaultColor: false,
-  })
-
-  const result = tokens.map(lineTokens => lineTokens.map(t => ({ text: t.content, style: t.htmlStyle ?? {} })))
-  signatureCache.set(text, result)
-  return result
+  return raw.map(lineTokens => lineTokens.map(t => compact({ t: t.text, s: palette.idFor(t.style) })))
 }
 
-function mergeLine(colourTokens, lineNumber, semantic, hovers) {
+// JSON.stringify drops undefined-valued keys entirely, so absent fields
+// cost nothing on the wire - where a spelled-out `"hoverIndex":null` on
+// every token would cost more than the payload it describes.
+//
+// Only null and undefined are dropped, deliberately: a segment's `s` and
+// `h` are indexes, and index 0 is a real one.
+function compact(o) {
+  for (const k of Object.keys(o)) {
+    if (o[k] == null) delete o[k]
+  }
+  return o
+}
+
+// Segment shape, deliberately terse - one of these exists per contiguous
+// run of same-styled characters, so on the order of thousands per file and
+// millions across the report:
+//   t  text (always present)
+//   s  index into the style palette; absent when a semantic class supplies
+//      the colour instead, or when the run is unstyled
+//   c  semantic CSS class(es); absent when the analyser covered no part of
+//      the run
+//   h  index into the page's hover table; absent when nothing hovers here
+function mergeLine(colourTokens, lineNumber, semantic, hovers, palette) {
   const chars = []
   const styles = []
 
@@ -105,26 +157,33 @@ function mergeLine(colourTokens, lineNumber, semantic, hovers) {
       end++
     }
 
-    items.push({
-      text: chars.slice(column, end).join(''),
+    items.push(compact({
+      t: chars.slice(column, end).join(''),
       // A semantic token's CSS class supplies the colour; drop the Shiki
       // inline style on that range so the class isn't fighting it.
-      style: sem ? null : style,
-      semanticType: sem ? sem.tokenType : null,
-      semanticStatic: sem ? (sem.modifiers ?? '').includes('static') : false,
+      s: sem ? null : palette.idFor(style),
+      c: sem ? semanticClass(sem) : null,
       // Only the small integer index into the caller's deduplicated hover
       // table travels with the segment - embedding the full
       // {description, kindLabel, signatureLines} object at every one of a
       // hover's (often many) covered segments blew the build's heap across
       // 489 pages worth of near-identical entries (repeated types like
       // "int" occur constantly).
-      hoverIndex: hover ? hover.hoverIndex : null,
-    })
+      h: hover ? hover.hoverIndex : null,
+    }))
 
     column = end
   }
 
-  return items.length > 0 ? items : [{ text: '', style: null, semanticType: null, semanticStatic: false, hoverIndex: null }]
+  return items.length > 0 ? items : [{ t: '' }]
+}
+
+// Precomputed at build time rather than assembled per segment in the
+// template: the two inputs never change once tokenized, and the string is
+// what the class binding wants anyway.
+function semanticClass(sem) {
+  const base = 'ghul-sem-' + sem.tokenType
+  return (sem.modifiers ?? '').includes('static') ? base + ' ghul-sem-mod-static' : base
 }
 
 // For one line, the per-column innermost (shortest) span covering it.
