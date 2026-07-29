@@ -1,0 +1,38 @@
+namespace CoverageDataTool is
+    class CLI_OPTIONS(
+        reports_pattern: string,
+        project_directory: string,
+        target_directory: string,
+        source_prefix: string
+    ) is
+        // `-reports:` accepts `;`-separated glob patterns (matching
+        // ReportGenerator's own convention); `-sourceprefix:` is the
+        // directory, relative to `-project:`, that Cobertura's `filename`
+        // attributes are relative to (ghūl's own pipeline instruments from
+        // `src/`, hence that default).
+        parse(arguments: string[]) -> CLI_OPTIONS? static is
+            let reports: string? mut;
+            let project: string? mut;
+            let target: string? mut;
+            let source_prefix mut = "src";
+
+            for arg in arguments do
+                if arg.starts_with("-reports:") then
+                    reports = arg.substring("-reports:".length);
+                elif arg.starts_with("-project:") then
+                    project = arg.substring("-project:".length);
+                elif arg.starts_with("-targetdir:") then
+                    target = arg.substring("-targetdir:".length);
+                elif arg.starts_with("-sourceprefix:") then
+                    source_prefix = arg.substring("-sourceprefix:".length);
+                fi
+            od
+
+            if !reports? \/ !project? \/ !target? then
+                return null;
+            fi
+
+            return CLI_OPTIONS(reports, project, target, source_prefix);
+        si
+    si
+si

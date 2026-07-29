@@ -1,0 +1,27 @@
+namespace Coverage.Output is
+    // Ported from ghul-mcp's src/mcp/wire.ghul: converts this tool's
+    // snake_case DTO property names to camelCase on the wire, matching the
+    // field naming ghul-dev's example-data/*.json already uses (startLine,
+    // kindLabel, ...) — the shape `site/`'s ported Vue components expect.
+    class SNAKE_TO_CAMEL_POLICY: System.Text.Json.JsonNamingPolicy is
+        init() is si
+
+        convert_name(name: string) -> string is
+            let result = System.Text.StringBuilder();
+            let upper_next mut = false;
+
+            for c in name do
+                if c == '_' then
+                    upper_next = true;
+                elif upper_next then
+                    result.append(char.to_upper(c));
+                    upper_next = false;
+                else
+                    result.append(c);
+                fi
+            od
+
+            return result.to_string();
+        si
+    si
+si

@@ -1,0 +1,165 @@
+namespace Coverage.Model is
+    use Collections.LIST;
+    use Collections.MAP;
+
+    use Analysis.Protocol.SYMBOL_FILE;
+    use Analysis.Protocol.SYMBOL_DTO;
+
+    use Cobertura.LINE_COVERAGE;
+
+    // Where a covered line was attributed to: the innermost enclosing
+    // method/property/constructor/function symbol.
+    class OWNER_MATCH(namespace_name: string, type_name: string, member_name: string, start_line: int);
+
+    // LSP SymbolKind values the analyser reports on SYMBOL_DTO.kind
+    // (Analysis.Protocol, mirroring Semantic.Symbols.SymbolKind).
+    is_member_kind(kind: int) -> bool =>
+        kind == 6 \/ kind == 7 \/ kind == 9 \/ kind == 12; // method, property, constructor, function
+
+    // Builds the namespace -> type -> method coverage tree from the
+    // analyser's whole-project SYMBOLS response and the merged
+    // per-(file, line) Cobertura data: every measured line is attributed to
+    // the innermost method/property/constructor/function symbol whose span
+    // contains it. A line with no enclosing member (field initializers, a
+    // primary-constructor header, ...) is dropped — out of scope for the
+    // per-method breakdown in v1.
+    class TREE_BUILDER is
+        init() is si
+
+        build(
+            symbol_files: LIST[SYMBOL_FILE],
+            file_lines: MAP[string, MAP[int, LINE_COVERAGE]]
+        ) -> LIST[NAMESPACE_COVERAGE] is
+            let types = MAP[string, TYPE_COVERAGE]();
+
+            for symbol_file in symbol_files do
+                let path = symbol_file.path;
+
+                if !file_lines.contains_key(path) then
+                    continue;
+                fi
+
+                let line_map = file_lines[path];
+
+                let members = LIST[SYMBOL_DTO]();
+                for symbol in symbol_file.symbols do
+                    if is_member_kind(symbol.kind) then
+                        members.add(symbol);
+                    fi
+                od
+
+                for (number, coverage) in line_map do
+                    let owner = _innermost_owner(members, number);
+
+                    if !owner? then
+                        continue;
+                    fi
+
+                    let type_key = "{owner.namespace_name}|{owner.type_name}";
+
+                    if !types.contains_key(type_key) then
+                        types[type_key] = TYPE_COVERAGE(owner.type_name, owner.namespace_name, path);
+                    fi
+
+                    let type_coverage = types[type_key];
+                    let method_coverage = type_coverage.find_or_add_method(owner.member_name, path, owner.start_line);
+
+                    method_coverage.add_line(coverage.hits, coverage.is_branch, coverage.branch_covered, coverage.branch_total);
+                od
+            od
+
+            return _group_by_namespace(types);
+        si
+
+        _innermost_owner(members: LIST[SYMBOL_DTO], line: int) -> OWNER_MATCH? is
+            // Comfortably larger than any real declaration's line span.
+            let best: SYMBOL_DTO? mut;
+            let best_span mut = 1000000000;
+
+            for member in members do
+                if member.start_line <= line /\ line <= member.end_line then
+                    let span = member.end_line - member.start_line;
+
+                    if span < best_span then
+                        best = member;
+                        best_span = span;
+                    fi
+                fi
+            od
+
+            if !best? then
+                return null;
+            fi
+
+            // A global (namespace-scope) function's own qualifier is
+            // already the namespace it's declared in (functions can't be
+            // owned by a type), regardless of how many dots it has — so
+            // for FUNCTION (kind 12) don't split it looking for a type
+            // name, and represent the function as belonging to no type
+            // (empty type_name; the writer renders this as a namespace's
+            // loose functions).
+            let (namespace_name, type_name) =
+                if best.kind == 12 then
+                    (best.qualifier, "")
+                else
+                    _split_owner(best.qualifier)
+                fi;
+
+            return OWNER_MATCH(namespace_name, type_name, _leading_identifier(best.search_description), best.start_line);
+        si
+
+        // search_description is a full declaration description for some
+        // symbol kinds (a function's is "name(params) -> return"), not
+        // just its short name - take the identifier up to the first
+        // non-identifier character, matching what a "method" column wants.
+        _leading_identifier(description: string) -> string is
+            let chars = description.to_char_array();
+            let end mut = 0;
+
+            while end < chars.count /\ (char.is_letter_or_digit(chars[end]) \/ chars[end] == '_') do
+                end = end + 1;
+            od
+
+            return if end > 0 then description.substring(0, end) else description fi;
+        si
+
+        _split_owner(qualifier: string) -> (string, string) is
+            if qualifier =~ "$globals" then
+                return ("", "");
+            fi
+
+            if qualifier.ends_with(".$globals") then
+                return (qualifier.substring(0, qualifier.length - ".$globals".length), "");
+            fi
+
+            let last_dot = qualifier.last_index_of('.');
+
+            if last_dot < 0 then
+                return ("", qualifier);
+            fi
+
+            return (qualifier.substring(0, last_dot), qualifier.substring(last_dot + 1));
+        si
+
+        _group_by_namespace(types: MAP[string, TYPE_COVERAGE]) -> LIST[NAMESPACE_COVERAGE] is
+            let namespaces = MAP[string, NAMESPACE_COVERAGE]();
+
+            for (key, type_coverage) in types do
+                let namespace_name = type_coverage.namespace_name;
+
+                if !namespaces.contains_key(namespace_name) then
+                    namespaces[namespace_name] = NAMESPACE_COVERAGE(namespace_name);
+                fi
+
+                namespaces[namespace_name].types.add(type_coverage);
+            od
+
+            let result = LIST[NAMESPACE_COVERAGE]();
+            for (key, namespace_coverage) in namespaces do
+                result.add(namespace_coverage);
+            od
+
+            return result;
+        si
+    si
+si

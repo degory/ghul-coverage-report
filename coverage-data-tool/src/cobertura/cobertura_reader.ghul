@@ -1,0 +1,97 @@
+namespace Cobertura is
+    use System.Xml.Linq.XDocument;
+    use System.Xml.Linq.XName;
+    use System.Xml.Linq.XAttribute;
+
+    use Collections.MAP;
+
+    use IO.File;
+
+    // Parses one Cobertura report and folds its per-line coverage into a
+    // shared filename -> line number -> LINE_COVERAGE map, so multiple
+    // suites' reports (unit / integration / cross-assembly / analysis) can
+    // be merged by calling this once per report against the same map.
+    //
+    // Cobertura's own `filename` attribute is relative to whatever
+    // directory coverlet was pointed at (ghūl's own pipeline instruments
+    // from `src/`); `source_prefix` re-keys it to be relative to the
+    // analyser's own working directory instead (the project directory),
+    // since that's what the analysis protocol's file paths use.
+    class COBERTURA_READER is
+        init() is si
+
+        read_and_merge(report_path: string, into: MAP[string, MAP[int, LINE_COVERAGE]], source_prefix: string) is
+            let document = XDocument.load(report_path);
+            let root = document.root!;
+
+            for class_element in root.descendants(XName.get("class")) do
+                let raw_filename = class_element.attribute(XName.get("filename"))!.value;
+                let filename = if source_prefix.length > 0 then "{source_prefix}/{raw_filename}" else raw_filename fi;
+
+                if !into.contains_key(filename) then
+                    into[filename] = MAP[int, LINE_COVERAGE]();
+                fi
+
+                let file_lines = into[filename];
+                let lines_element = class_element.element(XName.get("lines"));
+
+                if lines_element? then
+                    for line_element in lines_element.elements(XName.get("line")) do
+                        let number = System.Convert.to_int32(line_element.attribute(XName.get("number"))!.value);
+                        let hits = System.Convert.to_int32(line_element.attribute(XName.get("hits"))!.value);
+                        let branch_attribute = line_element.attribute(XName.get("branch"));
+
+                        let is_branch =
+                            if branch_attribute? then
+                                branch_attribute.value =~ "True"
+                            else
+                                false
+                            fi;
+
+                        let (branch_covered, branch_total) =
+                            if is_branch then
+                                _parse_condition_coverage(line_element.attribute(XName.get("condition-coverage")))
+                            else
+                                (0, 0)
+                            fi;
+
+                        let reading = LINE_COVERAGE(hits, is_branch, branch_covered, branch_total);
+
+                        if file_lines.contains_key(number) then
+                            file_lines[number].merge(reading);
+                        else
+                            file_lines[number] = reading;
+                        fi
+                    od
+                fi
+            od
+        si
+
+        // condition-coverage reads e.g. "37% (3/8)" or is absent; extract
+        // the "(covered/total)" pair. Absent or unparseable reads as (0, 0)
+        // — conservative, since the caller only reaches here for a line
+        // already flagged branch="True".
+        _parse_condition_coverage(attribute: XAttribute?) -> (int, int) is
+            if !attribute? then
+                return (0, 0);
+            fi
+
+            let text = attribute.value;
+            let open_paren = text.index_of('(');
+            let slash = text.index_of('/');
+            let close_paren = text.index_of(')');
+
+            if open_paren < 0 \/ slash < open_paren \/ close_paren < slash then
+                return (0, 0);
+            fi
+
+            try
+                let covered = System.Convert.to_int32(text.substring(open_paren + 1, slash - open_paren - 1));
+                let total = System.Convert.to_int32(text.substring(slash + 1, close_paren - slash - 1));
+                return (covered, total);
+            catch ex: System.FormatException
+                return (0, 0);
+            yrt
+        si
+    si
+si

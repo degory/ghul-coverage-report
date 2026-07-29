@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <DebugType>embedded</DebugType>
+    <GhulCompiler>dotnet ghul-compiler</GhulCompiler>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ghul.runtime" />
+    <PackageReference Include="ghul.analysis.protocol" />
+  </ItemGroup>
+</Project>

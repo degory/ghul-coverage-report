@@ -1,0 +1,118 @@
+namespace CoverageDataTool is
+    use IO.Std;
+    use IO.File;
+    use IO.Path;
+    use IO.Directory;
+
+    use Collections.LIST;
+    use Collections.MAP;
+
+    use Analysis.Protocol.EDIT_FILE;
+
+    use Cobertura.COBERTURA_READER;
+    use Cobertura.LINE_COVERAGE;
+
+    entry(arguments: string[]) is
+        let options = CLI_OPTIONS.parse(arguments);
+
+        if !options? then
+            Std.error.write_line(
+                "usage: coverage-data-tool -reports:<glob>[;<glob>...] -project:<dir> "
+                "-targetdir:<dir> [-sourceprefix:<dir, default 'src'>]"
+            );
+            System.Environment.exit(1);
+            return;
+        fi
+
+        let report_paths = _expand_reports(options.reports_pattern);
+
+        if report_paths.count == 0 then
+            Std.error.write_line("no report files matched: {options.reports_pattern}");
+            System.Environment.exit(1);
+            return;
+        fi
+
+        let file_lines = MAP[string, MAP[int, LINE_COVERAGE]]();
+        let reader = COBERTURA_READER();
+
+        for report_path in report_paths do
+            Std.out.write_line("reading {report_path}");
+            reader.read_and_merge(report_path, file_lines, options.source_prefix);
+        od
+
+        let source_root = Path.combine(options.project_directory, options.source_prefix);
+        let source_files = LIST[string]();
+        _collect_sources(source_root, source_files);
+
+        Std.out.write_line("found {source_files.count} source files under {source_root}");
+
+        let session = Coverage.Session.ANALYSER_SESSION(options.project_directory);
+
+        try
+            let file_contents = MAP[string, string]();
+            let edit_files = LIST[EDIT_FILE]();
+
+            for absolute in source_files do
+                let relative = Path.get_relative_path(options.project_directory, absolute).replace('\\', '/');
+                let content = File.read_all_text(absolute);
+
+                file_contents[relative] = content;
+                edit_files.add(EDIT_FILE(relative, content));
+            od
+
+            Std.out.write_line("editing {edit_files.count} files...");
+            session.edit_all(edit_files);
+
+            Std.out.write_line("querying project symbols...");
+            let symbol_files = session.all_symbols();
+
+            let namespaces = Coverage.Model.TREE_BUILDER().build(symbol_files, file_lines);
+
+            Coverage.Output.REPORT_WRITER().write(options.target_directory, namespaces, file_lines, file_contents);
+
+            Std.out.write_line("wrote report data to {options.target_directory}");
+        finally
+            session.dispose();
+        yrt
+    si
+
+    _expand_reports(pattern: string) -> LIST[string] is
+        let result = LIST[string]();
+
+        for part in pattern.split([';']) do
+            let trimmed = part.trim();
+
+            if trimmed.length == 0 then
+                continue;
+            fi
+
+            let directory = Path.get_directory_name(trimmed) ?? ".";
+            let file_pattern = Path.get_file_name(trimmed) ?? "*";
+            let search_directory = if directory.length > 0 then directory else "." fi;
+
+            if Directory.exists(search_directory) then
+                for found in Directory.get_files(search_directory, file_pattern) do
+                    result.add(found);
+                od
+            fi
+        od
+
+        return result;
+    si
+
+    _collect_sources(directory: string, result: LIST[string]) is
+        let name = Path.get_file_name(directory);
+
+        if name =~ "bin" \/ name =~ "obj" \/ name =~ "publish" \/ name =~ ".git" then
+            return;
+        fi
+
+        for f in Directory.get_files(directory, "*.ghul") do
+            result.add(f);
+        od
+
+        for d in Directory.get_directories(directory) do
+            _collect_sources(d, result);
+        od
+    si
+si

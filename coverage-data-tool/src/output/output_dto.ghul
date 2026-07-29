@@ -1,0 +1,28 @@
+namespace Coverage.Output is
+    use Collections.LIST;
+
+    class TOTALS_DTO(lines_covered: int, lines_valid: int, branches_covered: int, branches_valid: int);
+
+    class METHOD_DTO(
+        name: string, file: string, start_line: int,
+        lines_covered: int, lines_valid: int, branches_covered: int, branches_valid: int
+    );
+
+    class TYPE_DTO(
+        name: string, file: string,
+        lines_covered: int, lines_valid: int, branches_covered: int, branches_valid: int,
+        methods: LIST[METHOD_DTO]
+    );
+
+    class NAMESPACE_DTO(
+        name: string,
+        lines_covered: int, lines_valid: int, branches_covered: int, branches_valid: int,
+        types: LIST[TYPE_DTO]
+    );
+
+    class SUMMARY_DTO(totals: TOTALS_DTO, namespaces: LIST[NAMESPACE_DTO]);
+
+    class LINE_DTO(number: int, text: string, hits: int?, branch_covered: int?, branch_total: int?);
+
+    class FILE_DTO(path: string, lines: LIST[LINE_DTO]);
+si

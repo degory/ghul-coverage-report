@@ -1,0 +1,16 @@
+namespace Cobertura is
+    // One source line's coverage, merged across however many Cobertura
+    // reports mention it. hits sums across reports (independent test
+    // runs, e.g. unit + integration + cross-assembly + analysis); a branch
+    // counts as covered once any report covers it, and the larger of the
+    // two reports' branch totals wins on the rare mismatch (they should
+    // otherwise agree, since every report instruments the same source).
+    class LINE_COVERAGE(hits: int, is_branch: bool, branch_covered: int, branch_total: int) is
+        merge(other: LINE_COVERAGE) is
+            hits = hits + other.hits;
+            is_branch = is_branch \/ other.is_branch;
+            branch_covered = if branch_covered > other.branch_covered then branch_covered else other.branch_covered fi;
+            branch_total = if branch_total > other.branch_total then branch_total else other.branch_total fi;
+        si
+    si
+si

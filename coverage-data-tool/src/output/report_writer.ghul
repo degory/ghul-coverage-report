@@ -1,0 +1,140 @@
+namespace Coverage.Output is
+    use System.Text.Json.JsonSerializer;
+    use System.Text.Json.JsonSerializerOptions;
+
+    use Collections.LIST;
+    use Collections.MAP;
+
+    use IO.File;
+    use IO.Path;
+    use IO.Directory;
+
+    use Coverage.Model.NAMESPACE_COVERAGE;
+    use Cobertura.LINE_COVERAGE;
+
+    // Writes `summary.json` (the namespace -> type -> method rollup tree)
+    // and one `files/<path>.json` per source file (its lines, each with
+    // whatever coverage was measured for it) under the target directory.
+    class REPORT_WRITER is
+        _options: JsonSerializerOptions;
+
+        init() is
+            let o = JsonSerializerOptions();
+            o.property_naming_policy = SNAKE_TO_CAMEL_POLICY();
+            _options = o;
+        si
+
+        write(
+            target_directory: string,
+            namespaces: LIST[NAMESPACE_COVERAGE],
+            file_lines: MAP[string, MAP[int, LINE_COVERAGE]],
+            file_contents: MAP[string, string]
+        ) is
+            Directory.create_directory(target_directory);
+
+            _write_summary(target_directory, namespaces);
+            _write_files(target_directory, file_lines, file_contents);
+        si
+
+        _write_summary(target_directory: string, namespaces: LIST[NAMESPACE_COVERAGE]) is
+            let namespace_dtos = LIST[NAMESPACE_DTO]();
+
+            let totals_lines_covered mut = 0;
+            let totals_lines_valid mut = 0;
+            let totals_branches_covered mut = 0;
+            let totals_branches_valid mut = 0;
+
+            for ns in namespaces do
+                let type_dtos = LIST[TYPE_DTO]();
+
+                for t in ns.types do
+                    let method_dtos = LIST[METHOD_DTO]();
+
+                    for m in t.methods do
+                        method_dtos.add(
+                            METHOD_DTO(
+                                m.name, m.file, m.start_line,
+                                m.lines_covered, m.lines_valid, m.branches_covered, m.branches_valid
+                            )
+                        );
+                    od
+
+                    type_dtos.add(
+                        TYPE_DTO(
+                            t.name, t.file,
+                            t.lines_covered, t.lines_valid, t.branches_covered, t.branches_valid,
+                            method_dtos
+                        )
+                    );
+                od
+
+                namespace_dtos.add(
+                    NAMESPACE_DTO(
+                        ns.name,
+                        ns.lines_covered, ns.lines_valid, ns.branches_covered, ns.branches_valid,
+                        type_dtos
+                    )
+                );
+
+                totals_lines_covered = totals_lines_covered + ns.lines_covered;
+                totals_lines_valid = totals_lines_valid + ns.lines_valid;
+                totals_branches_covered = totals_branches_covered + ns.branches_covered;
+                totals_branches_valid = totals_branches_valid + ns.branches_valid;
+            od
+
+            let summary = SUMMARY_DTO(
+                TOTALS_DTO(totals_lines_covered, totals_lines_valid, totals_branches_covered, totals_branches_valid),
+                namespace_dtos
+            );
+
+            File.write_all_text(
+                Path.combine(target_directory, "summary.json"),
+                JsonSerializer.serialize[SUMMARY_DTO](summary, _options)
+            );
+        si
+
+        _write_files(
+            target_directory: string,
+            file_lines: MAP[string, MAP[int, LINE_COVERAGE]],
+            file_contents: MAP[string, string]
+        ) is
+            let files_directory = Path.combine(target_directory, "files");
+
+            for (path, content) in file_contents do
+                let has_coverage = file_lines.contains_key(path);
+                let line_map = if has_coverage then file_lines[path] else MAP[int, LINE_COVERAGE]() fi;
+
+                let line_dtos = LIST[LINE_DTO]();
+                let raw_lines = content.split(['\n']);
+
+                let line_count =
+                    if raw_lines.count > 0 /\ raw_lines[raw_lines.count - 1].length == 0 then
+                        raw_lines.count - 1
+                    else
+                        raw_lines.count
+                    fi;
+
+                for i in 0..line_count do
+                    let number = i + 1;
+                    let text = raw_lines[i].trim_end(['\r']);
+
+                    if line_map.contains_key(number) then
+                        let coverage = line_map[number];
+                        let branch_covered = if coverage.is_branch then coverage.branch_covered else null fi;
+                        let branch_total = if coverage.is_branch then coverage.branch_total else null fi;
+
+                        line_dtos.add(LINE_DTO(number, text, coverage.hits, branch_covered, branch_total));
+                    else
+                        line_dtos.add(LINE_DTO(number, text, null, null, null));
+                    fi
+                od
+
+                let file_dto = FILE_DTO(path, line_dtos);
+                let output_path = Path.combine(files_directory, "{path}.json");
+
+                Directory.create_directory(Path.get_directory_name(output_path)!);
+                File.write_all_text(output_path, JsonSerializer.serialize[FILE_DTO](file_dto, _options));
+            od
+        si
+    si
+si

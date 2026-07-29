@@ -1,0 +1,13 @@
+bin/
+obj/
+nupkg/
+publish/
+*.user
+.assemblies.json
+.ghul-mcp-*.rsp
+.timing-spike-*.rsp
+
+node_modules/
+site/.vitepress/dist/
+site/.vitepress/cache/
+site/coverage-data/

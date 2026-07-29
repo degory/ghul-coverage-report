@@ -1,0 +1,87 @@
+namespace Coverage.Model is
+    use Collections.LIST;
+
+    // Accumulated coverage for one method / property / constructor / global
+    // function, built by summing the merged Cobertura line readings that
+    // fall inside the symbol's own span.
+    class METHOD_COVERAGE is
+        name: string;
+        file: string;
+        start_line: int;
+        lines_covered: int field;
+        lines_valid: int field;
+        branches_covered: int field;
+        branches_valid: int field;
+
+        init(name: string, file: string, start_line: int) is
+            self.name = name;
+            self.file = file;
+            self.start_line = start_line;
+            lines_covered = 0;
+            lines_valid = 0;
+            branches_covered = 0;
+            branches_valid = 0;
+        si
+
+        add_line(hits: int, is_branch: bool, branch_covered: int, branch_total: int) is
+            lines_valid = lines_valid + 1;
+
+            if hits > 0 then
+                lines_covered = lines_covered + 1;
+            fi
+
+            if is_branch then
+                branches_valid = branches_valid + branch_total;
+                branches_covered = branches_covered + branch_covered;
+            fi
+        si
+    si
+
+    // One type's (or, when `name` is empty, one namespace's loose global
+    // functions') accumulated coverage.
+    class TYPE_COVERAGE is
+        name: string;
+        namespace_name: string;
+        file: string;
+        methods: LIST[METHOD_COVERAGE];
+
+        init(name: string, namespace_name: string, file: string) is
+            self.name = name;
+            self.namespace_name = namespace_name;
+            self.file = file;
+            methods = LIST[METHOD_COVERAGE]();
+        si
+
+        find_or_add_method(name: string, file: string, start_line: int) -> METHOD_COVERAGE is
+            for m in methods do
+                if m.name =~ name /\ m.start_line == start_line then
+                    return m;
+                fi
+            od
+
+            let created = METHOD_COVERAGE(name, file, start_line);
+            methods.add(created);
+            return created;
+        si
+
+        lines_covered: int => methods | .reduce(0, (acc, m) => acc + m.lines_covered);
+        lines_valid: int => methods | .reduce(0, (acc, m) => acc + m.lines_valid);
+        branches_covered: int => methods | .reduce(0, (acc, m) => acc + m.branches_covered);
+        branches_valid: int => methods | .reduce(0, (acc, m) => acc + m.branches_valid);
+    si
+
+    class NAMESPACE_COVERAGE is
+        name: string;
+        types: LIST[TYPE_COVERAGE];
+
+        init(name: string) is
+            self.name = name;
+            types = LIST[TYPE_COVERAGE]();
+        si
+
+        lines_covered: int => types | .reduce(0, (acc, t) => acc + t.lines_covered);
+        lines_valid: int => types | .reduce(0, (acc, t) => acc + t.lines_valid);
+        branches_covered: int => types | .reduce(0, (acc, t) => acc + t.branches_covered);
+        branches_valid: int => types | .reduce(0, (acc, t) => acc + t.branches_valid);
+    si
+si
