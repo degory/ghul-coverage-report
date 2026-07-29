@@ -4,7 +4,7 @@
 // this can reference itself as <ExplorerDir> in its own template with no
 // manual registration.
 import { useRoute } from 'vitepress'
-import { rate, rateClass, fileLink } from '../explorer-links.mjs'
+import { rate, rateBar, rateTitle, fileLink } from '../explorer-links.mjs'
 
 defineProps({
   // { dirs: [{name, path, dirs, files}], files: [{name, file, linesCovered, linesValid}] }
@@ -32,9 +32,9 @@ function isActive(file) {
   <div v-for="f in dir.files" :key="f.file" class="tree-leaf">
     <a class="tree-link" :class="{ active: isActive(f.file) }" :href="fileLink(f.file)">{{ f.name }}</a>
     <span
-      class="rate-dot"
-      :class="rateClass(rate(f.linesCovered, f.linesValid), f.measured)"
-      :title="f.measured ? '' : 'no suite touched this file'"
+      class="rate-bar"
+      v-bind="rateBar(rate(f.linesCovered, f.linesValid), f.measured)"
+      :title="rateTitle(f.linesCovered, f.linesValid, f.measured)"
     ></span>
   </div>
 </template>

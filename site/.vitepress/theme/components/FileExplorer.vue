@@ -11,7 +11,7 @@
 // recursively). ghūl namespaces do not have to line up with directories,
 // so neither view can be derived from the other by eye.
 //
-// Both are navigation; the coverage rate-dot on each row rides along
+// Both are navigation; the coverage rate bar on each row rides along
 // rather than being a mode of its own. With a file page open, Outline puts
 // that file's own types and methods first, so the member list answers
 // "what is in this file" and "which parts of it are untested" together,
@@ -51,7 +51,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vitepress'
 import summary from '../../../coverage-data/summary.json'
 import files from '../../../coverage-data/files.json'
-import { rate, rateClass, fileLink } from '../explorer-links.mjs'
+import { rate, rateBar, rateTitle, fileLink } from '../explorer-links.mjs'
 import ExplorerDir from './ExplorerDir.vue'
 
 const route = useRoute()
@@ -129,6 +129,8 @@ const outline = computed(() =>
           file: t.file,
           startLine: t.startLine,
           rate: rate(t.linesCovered, t.linesValid),
+          linesCovered: t.linesCovered,
+          linesValid: t.linesValid,
           methods: [...t.methods]
             .map(m => ({ ...m, rate: rate(m.linesCovered, m.linesValid) }))
             .sort((a, b) => a.name.localeCompare(b.name)),
@@ -207,7 +209,7 @@ const fileOutline = computed(() => {
               <div v-for="t in fileOutline" :key="t.name + t.startLine" class="outline-type">
                 <div class="tree-leaf">
                   <a class="tree-link type" :class="{ active: isActiveLine(t.file, t.startLine) }" :href="fileLink(t.file, t.startLine)">{{ t.name }}</a>
-                  <span class="rate-dot" :class="rateClass(t.rate)"></span>
+                  <span class="rate-bar" v-bind="rateBar(t.rate)" :title="rateTitle(t.linesCovered, t.linesValid)"></span>
                 </div>
                 <!-- Overloads share a name and are only told apart by their
                      signature, which runs to well over a hundred characters
@@ -220,7 +222,7 @@ const fileOutline = computed(() => {
                     :href="fileLink(m.file, m.startLine)"
                     :title="m.signature"
                   >{{ m.name }}</a>
-                  <span class="rate-dot" :class="rateClass(m.rate)"></span>
+                  <span class="rate-bar" v-bind="rateBar(m.rate)" :title="rateTitle(m.linesCovered, m.linesValid)"></span>
                 </div>
               </div>
             </template>
@@ -244,7 +246,7 @@ const fileOutline = computed(() => {
                     :href="fileLink(t.file, t.startLine)"
                     @click="$event.currentTarget.closest('details').open = true"
                   >{{ t.name }}</a>
-                  <span class="rate-dot" :class="rateClass(t.rate)"></span>
+                  <span class="rate-bar" v-bind="rateBar(t.rate)" :title="rateTitle(t.linesCovered, t.linesValid)"></span>
                 </summary>
                 <div class="tree-children">
                   <div v-for="m in t.methods" :key="m.name + m.startLine" class="tree-leaf">
@@ -254,7 +256,7 @@ const fileOutline = computed(() => {
                       :href="fileLink(m.file, m.startLine)"
                       :title="m.signature"
                     >{{ m.name }}</a>
-                    <span class="rate-dot" :class="rateClass(m.rate)"></span>
+                    <span class="rate-bar" v-bind="rateBar(m.rate)" :title="rateTitle(m.linesCovered, m.linesValid)"></span>
                   </div>
                 </div>
               </details>
