@@ -1,0 +1,270 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "ghul",
+	"colors": {
+		"invalid.illegal.ghul": "#FF0000"
+	},
+	"patterns": [
+		{
+			"match": "^(►)",
+			"captures": {
+				"1": { "name": "markup.inserted.narrowing-taken.ghul" }
+			}
+		},
+		{
+			"match": "^(>)",
+			"captures": {
+				"1": { "name": "markup.deleted.narrowing-else.ghul" }
+			}
+		},
+		{
+			"name": "comment.ghul",
+			"match": "//.*$"
+		},
+		{
+			"include": "#other"
+		},
+		{
+			"include": "#brackets"
+		},
+		{
+			"include": "#strings"
+		}
+	],
+	"repository": {
+		"escaped_characters": {
+			"patterns": [
+				{
+					"name": "constant.character.escape.ghul",
+					"match": "\\\\."
+				},
+				{
+					"name": "constant.character.escape.ghul",
+					"match": "\\{\\{|\\}\\}"
+				}
+			]
+		},
+		"brackets": {
+			"patterns": [
+				{
+					"name": "punctuation.section.brackets.ghul",
+					"match": "\\("
+				},
+				{
+					"name": "punctuation.section.brackets.ghul",
+					"match": "\\)"
+				},
+				{
+					"name": "punctuation.section.brackets.ghul",
+					"match": "\\["
+				},
+				{
+					"name": "punctuation.section.brackets.ghul",
+					"match": "\\]"
+				},
+				{
+					"name": "punctuation.section.brackets.ghul",
+					"match": ","
+				}
+			]			
+		},
+		"brackets_as_operators": {
+			"patterns": [
+				{
+					"name": "keyword.operator.ghul",
+					"match": "\\("
+				},
+				{
+					"name": "keyword.operator.ghul",
+					"match": "\\)"
+				},
+				{
+					"name": "keyword.operator.ghul",
+					"match": "\\["
+				},
+				{
+					"name": "keyword.operator.ghul",
+					"match": "\\]"
+				},
+				{
+					"name": "keyword.operator.ghul",
+					"match": ","
+				}
+			]
+		},
+		"other": {
+			"patterns": [
+				{
+					"name": "comment.ghul",
+					"begin": "/\\*",
+					"end": "\\*/"
+				},
+				{
+					"name": "invalid.illegal.ghul",
+					"match": "!!!|\\?\\?\\?"
+				},
+				{
+					"name": "constant.language.ghul",
+					"match": "\\b(?<!\\`)(null|true|false|self|super)\\b"
+				},
+				{
+					"name": "constant.numeric.ghul",
+					"match": "\\b([0-9](?:_?[0-9])*(?:\\.[0-9](?:_?[0-9])*)?(?:[eE][-+]?[0-9](?:_?[0-9])*)?[dDsS]?)\\b"
+				},
+				{
+					"name": "keyword.type.ghul",
+					"match": "(=>|->|:)"
+				},
+				{
+					"name": "storage.modifier.ghul",
+					"match": "(\\b(?<!\\`)(abstract|static|public|protected|private|field|let|mut|rec|out|init|@)\\b)|(\\b_(?=[A-Za-z]))"
+				},
+				{
+					"name": "keyword.operator.ghul",
+					"match": "(!|\\$|%|\\^|&|\\*|-|\\+|=|\\||~|#|\\\\|<|>|\\.|\\?|\\/|\\*)+"
+				},
+				{
+					"comment": "impl header scope - ends on lookahead for `is`, or at a blank line so an unfinished header doesn't consume the rest of the file.",
+					"begin": "\\b(?<!\\`)(impl)\\b",
+					"end": "\\b(?<!\\`)(?=is\\b)|(?=^\\s*$)",
+					"beginCaptures": {
+						"1": { "name": "keyword.other.ghul" }
+					},
+					"patterns": [
+						{
+							"name": "keyword.other.ghul",
+							"match": "\\b(?<!\\`)(for)\\b"
+						},
+						{
+							"include": "#other"
+						}
+					]
+				},
+				{
+					"name": "keyword.other.ghul",
+					"match": "\\b(?<!\\`)(new|cast|isa|typeof|namespace|class|struct|union|trait|enum|partial|use|innate|is|si|val|lav|optional)\\b"
+				},
+				{
+					"name": "entity.name.type.ghul",
+					"match": "\\b([A-Z][a-zA-Z0-9_\\`]*)\\b"
+				},
+				{
+					"name": "keyword.control.ghul",
+					"match": "\\b(?<!\\`)(assert|if|then|elif|else|fi|for|in|while|do|od|continue|break|case|when|default|esac|throw|try|catch|finally|yrt|return|yield|await)\\b"
+				},
+				{
+					"name": "entity.name.function.ghul",
+					"match": "((?<=_)|(\\b))([a-zA-Z_][a-zA-Z0-9_]*)(?=\\s*\\()"
+				},
+				{
+					"name": "entity.name.type.ghul",
+					"match": "\\b(?<!\\`)(void|object|string|ref|ptr|bool|byte|ubyte|short|ushort|int|uint|long|ulong|word|uword|single|double|decimal|char)\\b"
+				},
+				{
+					"name": "entity.name.ghul variable.other.ghul",
+					"match": "((?<=_)|(\\b))([a-zA-Z\\`][a-zA-Z0-9_]*)\\b"
+				},
+				{
+					"name": "entity.name.function.ghul",
+					"match": "((?<=_)|(\\b))([a-zA-Z_][a-zA-Z0-9_]*)(?=\\s*\\()"
+				},
+				{
+					"name": "entity.name.type.ghul",
+					"match": "\\b([A-Z][a-zA-Z0-9_\\`]*)\\b"
+				},
+				{
+					"name": "constant.character.ghul",
+					"begin": "'",
+					"end": "'",
+					"patterns": [
+						{
+							"name": "constant.character.escape.ghul",
+							"match": "\\\\."
+						}
+					]
+				}
+			]
+		},
+		"strings": {
+			"patterns": [
+				{
+					"name": "string.quoted.double.interpolated",
+					"begin": "\\\"",
+					"end": "\\\"",
+					"patterns": [
+						{
+							"include": "#escaped_characters"
+						},
+						{
+							"name": "expression.level1.ghul",
+							"begin": "\\{",
+							"beginCaptures": {
+								"0": {
+								  "name": "punctuation.definition.template-expression.begin.ghul"
+								}
+							  },
+							  "end": "\\}",
+							"endCaptures": {
+							  "0": {
+								"name": "punctuation.definition.template-expression.end.ghul"
+							  }
+							},
+							"patterns": [
+								{
+									"include": "#other"
+								},
+								{
+									"include": "#brackets_as_operators"
+								},		
+								{
+									"name": "string.interpolated.level1.ghul",
+									"begin": "\\\"",
+									"end": "\\\"",
+									"patterns": [
+										{
+											"include": "#escaped_characters"
+										},
+										{
+											"name": "expression.level2.ghul",
+											"begin": "\\{",
+											"beginCaptures": {
+												"0": {
+												  "name": "punctuation.definition.template-expression.begin.ghul"
+												}
+											  },
+											  "end": "\\}",
+											"endCaptures": {
+											  "0": {
+												"name": "punctuation.definition.template-expression.end.ghul"
+											  }
+											},
+											"patterns": [
+												{
+													"include": "#other"
+												},
+												{
+													"include": "#brackets_as_operators"
+												},						
+												{
+													"name": "string.interpolated.level3.ghul",
+													"begin": "\\\"",
+													"end": "\\\"",
+													"patterns": [
+														{
+															"include": "#escaped_characters"
+														}
+													]
+												}
+											]
+										}
+									]
+								}
+							]
+						}
+					]
+				}
+			]
+		}
+	},
+	"scopeName": "source.ghul"
+}

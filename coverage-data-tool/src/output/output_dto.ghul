@@ -24,5 +24,10 @@ namespace Coverage.Output is
 
     class LINE_DTO(number: int, text: string, hits: int?, branch_covered: int?, branch_total: int?);
 
-    class FILE_DTO(path: string, lines: LIST[LINE_DTO]);
+    // Mirrors ghul-dev's example-data WIRE_SEMANTIC_TOKEN shape (1-based
+    // line/column, VS Code semantic-token vocabulary) so the site's ported
+    // GhulExample.vue merge logic needs no adaptation.
+    class TOKEN_DTO(start_line: int, start_column: int, end_line: int, end_column: int, token_type: string, modifiers: string);
+
+    class FILE_DTO(path: string, lines: LIST[LINE_DTO], semantic_tokens: LIST[TOKEN_DTO]);
 si

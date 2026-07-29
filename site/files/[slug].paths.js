@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
+import { tokenizeLines } from '../.vitepress/highlight.mjs'
 
 // coverage-data-tool writes one JSON file per source file under
 // site/coverage-data/files/, mirroring the project's own directory
@@ -28,21 +29,29 @@ function walk(dir, out) {
 }
 
 export default {
-  paths() {
+  async paths() {
     const found = []
     walk(dataDir, found)
 
-    return found.map(jsonPath => {
+    return Promise.all(found.map(async jsonPath => {
       const data = JSON.parse(readFileSync(jsonPath, 'utf-8'))
+      const code = data.lines.map(l => l.text).join('\n')
+      const colourLines = await tokenizeLines(code, data.semanticTokens)
+
+      const enrichedLines = data.lines.map((line, i) => ({
+        ...line,
+        segments: colourLines[i] ?? [{ text: line.text, style: null, semanticType: null, semanticStatic: false }],
+      }))
+
       const slug = data.path.replace(/\//g, '__').replace(/\.ghul$/, '')
 
       return {
         params: {
           slug,
           path: data.path,
-          linesJson: JSON.stringify(data.lines),
+          linesJson: JSON.stringify(enrichedLines),
         },
       }
-    })
+    }))
   },
 }

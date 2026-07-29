@@ -11,6 +11,7 @@ namespace Coverage.Output is
 
     use Coverage.Model.NAMESPACE_COVERAGE;
     use Cobertura.LINE_COVERAGE;
+    use Analysis.Protocol.SEMANTIC_TOKEN;
 
     // Writes `summary.json` (the namespace -> type -> method rollup tree)
     // and one `files/<path>.json` per source file (its lines, each with
@@ -28,12 +29,13 @@ namespace Coverage.Output is
             target_directory: string,
             namespaces: LIST[NAMESPACE_COVERAGE],
             file_lines: MAP[string, MAP[int, LINE_COVERAGE]],
-            file_contents: MAP[string, string]
+            file_contents: MAP[string, string],
+            file_tokens: MAP[string, LIST[SEMANTIC_TOKEN]]
         ) is
             Directory.create_directory(target_directory);
 
             _write_summary(target_directory, namespaces);
-            _write_files(target_directory, file_lines, file_contents);
+            _write_files(target_directory, file_lines, file_contents, file_tokens);
         si
 
         _write_summary(target_directory: string, namespaces: LIST[NAMESPACE_COVERAGE]) is
@@ -96,7 +98,8 @@ namespace Coverage.Output is
         _write_files(
             target_directory: string,
             file_lines: MAP[string, MAP[int, LINE_COVERAGE]],
-            file_contents: MAP[string, string]
+            file_contents: MAP[string, string],
+            file_tokens: MAP[string, LIST[SEMANTIC_TOKEN]]
         ) is
             let files_directory = Path.combine(target_directory, "files");
 
@@ -129,7 +132,20 @@ namespace Coverage.Output is
                     fi
                 od
 
-                let file_dto = FILE_DTO(path, line_dtos);
+                let token_dtos = LIST[TOKEN_DTO]();
+
+                if file_tokens.contains_key(path) then
+                    for token in file_tokens[path] do
+                        token_dtos.add(
+                            TOKEN_DTO(
+                                token.start_line, token.start_column, token.end_line, token.end_column,
+                                token.token_type, token.modifiers
+                            )
+                        );
+                    od
+                fi
+
+                let file_dto = FILE_DTO(path, line_dtos, token_dtos);
                 let output_path = Path.combine(files_directory, "{path}.json");
 
                 Directory.create_directory(Path.get_directory_name(output_path)!);

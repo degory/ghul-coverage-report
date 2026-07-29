@@ -68,7 +68,16 @@ namespace CoverageDataTool is
 
             let namespaces = Coverage.Model.TREE_BUILDER().build(symbol_files, file_lines);
 
-            Coverage.Output.REPORT_WRITER().write(options.target_directory, namespaces, file_lines, file_contents);
+            Std.out.write_line("querying semantic tokens for {source_files.count} files...");
+            let file_tokens = MAP[string, LIST[Analysis.Protocol.SEMANTIC_TOKEN]]();
+
+            for (relative, content) in file_contents do
+                file_tokens[relative] = session.semantic_tokens(relative);
+            od
+
+            Coverage.Output.REPORT_WRITER().write(
+                options.target_directory, namespaces, file_lines, file_contents, file_tokens
+            );
 
             Std.out.write_line("wrote report data to {options.target_directory}");
         finally

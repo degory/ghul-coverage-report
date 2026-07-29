@@ -16,6 +16,7 @@ namespace Coverage.Session is
     use Analysis.Protocol.Request;
     use Analysis.Protocol.Response;
     use Analysis.Protocol.SYMBOL_FILE;
+    use Analysis.Protocol.SEMANTIC_TOKEN;
 
     // Drives a `dotnet ghul-compiler --analyse` subprocess pointed at an
     // arbitrary target project directory (not this tool's own project —
@@ -155,6 +156,21 @@ namespace Coverage.Session is
             fi
 
             throw Exception("expected a symbols response, got a different Response variant");
+        si
+
+        // Unlike SYMBOLS, SEMANTIC_TOKENS has no whole-project form - one
+        // call per file. Measured (2026-07-29) at ~21ms/file for ghul's own
+        // 489-file source, well within budget.
+        semantic_tokens(path: string) -> LIST[SEMANTIC_TOKEN] is
+            write_request(Request.SEMANTIC_TOKENS(path));
+
+            let response = read_query_response();
+
+            if let tokens: Response.SEMANTIC_TOKENS = response then
+                return tokens.tokens;
+            fi
+
+            throw Exception("expected a semantic_tokens response, got a different Response variant");
         si
 
         // A query command falls through to a compile_all when the queried

@@ -1,7 +1,8 @@
 <script setup>
-// Phase 1: plain source with a coverage gutter, no syntax highlighting yet
-// (that's ported from ghul-dev's Shiki + semantic-token pipeline in a
-// later phase — see the repo's AGENTS.md).
+// `line.segments` (colour + semantic-token runs) is computed at build time
+// by ../../.vitepress/highlight.mjs, ported from ghul-dev's GhulExample.vue
+// / ghulExampleDataPlugin - see that file for the origin note. This
+// component just renders the already-merged runs plus the coverage gutter.
 defineProps({
   path: { type: String, required: true },
   lines: { type: Array, required: true },
@@ -27,7 +28,7 @@ function branchLabel(line) {
           <td class="ln">{{ line.number }}</td>
           <td class="hits">{{ line.hits ?? '' }}</td>
           <td class="branch">{{ branchLabel(line) }}</td>
-          <td class="text"><pre>{{ line.text }}</pre></td>
+          <td class="text"><pre><span v-for="(segment, i) in line.segments" :key="i" :style="segment.style" :class="[segment.semanticType ? 'ghul-sem-' + segment.semanticType : null, segment.semanticStatic ? 'ghul-sem-mod-static' : null]">{{ segment.text }}</span></pre></td>
         </tr>
       </tbody>
     </table>
@@ -73,5 +74,38 @@ function branchLabel(line) {
 
 .cov-miss {
   background: rgba(248, 81, 73, 0.15);
+}
+
+/* Ported from ghul-dev's src/.vitepress/theme/components/GhulExample.vue
+   (verified VS Code Light+/Dark+ mapping). If ghul-dev's palette changes,
+   port the change here too. */
+.ghul-sem-namespace      { color: #267F99; }
+.ghul-sem-class          { color: #267F99; }
+.ghul-sem-interface      { color: #267F99; }
+.ghul-sem-struct         { color: #267F99; }
+.ghul-sem-enum           { color: #267F99; }
+.ghul-sem-typeParameter  { color: #267F99; }
+.ghul-sem-enumMember     { color: #0070C1; }
+.ghul-sem-method         { color: #795E26; }
+.ghul-sem-function       { color: #795E26; }
+.ghul-sem-property       { color: #001080; }
+.ghul-sem-variable       { color: #001080; }
+.ghul-sem-parameter      { color: #001080; }
+
+.dark .ghul-sem-namespace      { color: #4EC9B0; }
+.dark .ghul-sem-class          { color: #4EC9B0; }
+.dark .ghul-sem-interface      { color: #B8D7A3; }
+.dark .ghul-sem-struct         { color: #4EC9B0; }
+.dark .ghul-sem-enum           { color: #4EC9B0; }
+.dark .ghul-sem-typeParameter  { color: #4EC9B0; }
+.dark .ghul-sem-enumMember     { color: #4FC1FF; }
+.dark .ghul-sem-method         { color: #DCDCAA; }
+.dark .ghul-sem-function       { color: #DCDCAA; }
+.dark .ghul-sem-property       { color: #9CDCFE; }
+.dark .ghul-sem-variable       { color: #9CDCFE; }
+.dark .ghul-sem-parameter      { color: #9CDCFE; }
+
+.ghul-sem-mod-static {
+  font-style: italic;
 }
 </style>
