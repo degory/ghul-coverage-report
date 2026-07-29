@@ -7,7 +7,11 @@ export function rate(covered, valid) {
   return valid > 0 ? covered / valid : 1
 }
 
-export function rateClass(x) {
+// `measured=false` is a file/entry no suite's instrumentation ever
+// touched - distinct from 0% (instrumented, never executed), which the
+// green/yellow/red scale already covers.
+export function rateClass(x, measured = true) {
+  if (!measured) return 'rate-unmeasured'
   if (x >= 0.8) return 'rate-high'
   if (x >= 0.5) return 'rate-mid'
   return 'rate-low'

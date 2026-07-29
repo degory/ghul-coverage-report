@@ -22,6 +22,15 @@ namespace Coverage.Output is
 
     class SUMMARY_DTO(totals: TOTALS_DTO, namespaces: LIST[NAMESPACE_DTO]);
 
+    // One entry per source file report_writer wrote a page for - every
+    // `.ghul` file under the project's source root, not just the ones that
+    // made it into a Cobertura report. `measured` is false for a file no
+    // suite ever instrumented, distinct from a file that was instrumented
+    // and simply never executed (measured=true, lines_covered=0) - the
+    // site renders the two differently rather than treating an unmeasured
+    // file as 0% covered.
+    class FILE_LIST_ENTRY_DTO(path: string, lines_covered: int, lines_valid: int, measured: bool);
+
     class LINE_DTO(number: int, text: string, hits: int?, branch_covered: int?, branch_total: int?);
 
     // Mirrors ghul-dev's example-data WIRE_SEMANTIC_TOKEN shape (1-based

@@ -21,13 +21,16 @@ function isActive(file) {
 
 <template>
   <details v-for="d in dir.dirs" :key="d.path" class="tree-node">
-    <summary class="tree-label">{{ d.name }}</summary>
+    <summary class="tree-label">
+      <span class="tree-toggle"></span>
+      {{ d.name }}
+    </summary>
     <div class="tree-children">
       <ExplorerDir :dir="d" />
     </div>
   </details>
   <div v-for="f in dir.files" :key="f.file" class="tree-leaf">
     <a class="tree-link" :class="{ active: isActive(f.file) }" :href="fileLink(f.file)">{{ f.name }}</a>
-    <span class="rate-dot" :class="rateClass(rate(f.linesCovered, f.linesValid))"></span>
+    <span class="rate-dot" :class="rateClass(rate(f.linesCovered, f.linesValid), f.measured)" :title="f.measured ? '' : 'no suite touched this file'"></span>
   </div>
 </template>

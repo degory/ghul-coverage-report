@@ -52,16 +52,69 @@ html.explorer-collapsed .VPNav, html.explorer-collapsed .VPPage {
   margin: 0;
 }
 
+/* `.tree-label` is a <summary> element, and `display: flex` (needed to
+   align its link + rate-dot) suppresses a <summary>'s native disclosure
+   triangle in Chromium/Firefox - browsers only draw it under
+   `display: list-item`. Turn the native marker off; `.tree-toggle` below
+   is the real, sized replacement. */
 .tree-label {
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 3px 4px;
   border-radius: 4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  list-style: none;
+  transition: background-color 0.12s ease;
+}
+
+.tree-label::-webkit-details-marker {
+  display: none;
+}
+
+/* A real element, not a CSS-drawn marker, and deliberately roomy (20px,
+   well past comfortable click-target size) - a type/method row's summary
+   also holds a real <a> link, and a <summary>'s native click-to-toggle
+   does not fire when the click landed on that link (the link's own
+   navigation takes precedence over the ancestor's toggle behaviour), so
+   this is the one part of the row that reliably toggles. It needs to be
+   big and visible enough to hit on purpose. */
+.tree-toggle {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--vp-c-text-3);
+  border-radius: 4px;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+/* A CSS-drawn triangle (the classic zero-size-border trick) rotated open
+   rather than a unicode glyph swapped for a different one - one shape,
+   smoothly animated, instead of two characters with slightly different
+   weight and optical alignment depending on the font. */
+.tree-toggle::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 4px 0 4px 5px;
+  border-color: transparent transparent transparent currentColor;
+  transition: transform 0.15s ease;
+}
+
+.tree-node[open] > .tree-label > .tree-toggle::before {
+  transform: rotate(90deg);
+}
+
+.tree-toggle:hover {
+  background: var(--vp-c-bg-mute);
+  color: var(--vp-c-text-1);
 }
 
 .tree-label:hover, .tree-leaf:hover {
@@ -74,8 +127,12 @@ html.explorer-collapsed .VPNav, html.explorer-collapsed .VPPage {
   padding-left: 6px;
 }
 
+/* Left padding matches a sibling row's .tree-toggle width (20px) + its
+   gap (2px) + the summary's own left padding (4px), so a leaf's text
+   lines up with an expandable sibling's text at the same nesting level
+   (e.g. a file next to a directory) rather than sitting flush left. */
 .tree-leaf {
-  padding: 2px 4px;
+  padding: 3px 4px 3px 26px;
   border-radius: 4px;
   display: flex;
   align-items: center;
@@ -83,9 +140,12 @@ html.explorer-collapsed .VPNav, html.explorer-collapsed .VPPage {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: background-color 0.12s ease;
 }
 
 .tree-link {
+  flex: 1;
+  min-width: 0;
   color: var(--vp-c-text-1);
   text-decoration: none;
   overflow: hidden;
@@ -105,12 +165,14 @@ html.explorer-collapsed .VPNav, html.explorer-collapsed .VPPage {
 
 .rate-dot {
   flex: none;
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   margin-left: auto;
+  box-shadow: 0 0 0 1px var(--vp-c-bg);
 }
 
 .rate-high { background: #2ea043; }
 .rate-mid { background: #d29922; }
 .rate-low { background: #f85149; }
+.rate-unmeasured { background: transparent; border: 1px solid var(--vp-c-text-3); }

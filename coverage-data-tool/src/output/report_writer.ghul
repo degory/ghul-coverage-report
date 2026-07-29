@@ -37,8 +37,45 @@ namespace Coverage.Output is
             Directory.create_directory(target_directory);
 
             _write_summary(target_directory, namespaces);
+            _write_file_list(target_directory, file_contents, file_lines);
             _write_files(target_directory, file_lines, file_contents, file_tokens, file_hovers);
             _write_badge(target_directory, namespaces);
+        si
+
+        // summary.json's namespace/type/method tree only knows about files
+        // that appear in at least one Cobertura report - a file no suite's
+        // instrumentation ever touched is silently absent from it, even
+        // though _write_files below still renders a full page for it. This
+        // is the flat, unconditional file list the site's browser should
+        // navigate from instead.
+        _write_file_list(
+            target_directory: string,
+            file_contents: MAP[string, string],
+            file_lines: MAP[string, MAP[int, LINE_COVERAGE]]
+        ) is
+            let entries = LIST[FILE_LIST_ENTRY_DTO]();
+
+            for (path, content) in file_contents do
+                if file_lines.contains_key(path) then
+                    let line_map = file_lines[path];
+                    let covered mut = 0;
+
+                    for (number, coverage) in line_map do
+                        if coverage.hits > 0 then
+                            covered = covered + 1;
+                        fi
+                    od
+
+                    entries.add(FILE_LIST_ENTRY_DTO(path, covered, line_map.count, true));
+                else
+                    entries.add(FILE_LIST_ENTRY_DTO(path, 0, 0, false));
+                fi
+            od
+
+            File.write_all_text(
+                Path.combine(target_directory, "files.json"),
+                JsonSerializer.serialize[LIST[FILE_LIST_ENTRY_DTO]](entries, _options)
+            );
         si
 
         _write_badge(target_directory: string, namespaces: LIST[NAMESPACE_COVERAGE]) is

@@ -1,12 +1,36 @@
 <script setup>
 // Persistent left-hand browser, shown on every page via theme/Layout.vue.
-// Two modes sharing one tree widget: "Files" (directory tree, from the
-// distinct file paths in summary.json, rendered recursively by
-// ExplorerDir.vue) and "Outline" (namespace -> type -> method, straight
-// from summary.json - only three levels deep, so rendered inline rather
-// than recursively). Collapse state and mode are kept in localStorage so
-// they survive navigation between the index and file pages (each is a
-// full page load under VitePress's file-based routing).
+// Two modes sharing one tree widget: "Files" (directory tree, from
+// files.json - every source file report_writer wrote a page for,
+// regardless of coverage; summary.json only knows about files that appear
+// in at least one Cobertura report, which silently drops anything no
+// suite's instrumentation touched - rendered recursively by
+// ExplorerDir.vue) and "Outline" (namespace -> type -> method, from
+// summary.json - only three levels deep, so rendered inline rather than
+// recursively). Collapse state and mode are kept in localStorage so they
+// survive navigation between the index and file pages - and, within a
+// single page-load, VitePress's router swaps only <Content/> on
+// navigation (that's what makes it feel like an SPA); FileExplorer is
+// mounted once via Layout.vue, outside <Content/>, so it survives an
+// in-app navigation untouched rather than remounting.
+//
+// A type row's name is a real link (like a file or method leaf), but its
+// click handler also forces its own <details> open - clicking a type both
+// navigates to its file *and* reveals its methods, rather than requiring
+// a second click. This is safe specifically because of the above: the
+// click navigates via VitePress's client-side router, not a full page
+// load, so the DOM node whose `.open` we just set doesn't get torn down
+// by the navigation it's also triggering. A namespace or directory row
+// has no navigable target, so its whole summary just toggles natively -
+// no click handler needed there.
+//
+// `.tree-toggle` is a dedicated, generously-sized (20px) chevron on every
+// expandable row, kept as a real element rather than a CSS-drawn marker -
+// `display: flex` on `.tree-label` (needed for layout) suppresses a
+// <summary>'s native marker in Chromium/Firefox, and a few px of
+// replacement glyph is too small a target to hit on purpose. It's also
+// the only way to expand a type row *without* navigating away from
+// whatever file is currently open, since the name link always does both.
 //
 // Deliberately position:fixed and rendered through Layout.vue's
 // `layout-top` slot - that slot's DOM position doesn't matter for a fixed
@@ -14,6 +38,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vitepress'
 import summary from '../../../coverage-data/summary.json'
+import files from '../../../coverage-data/files.json'
 import { rate, rateClass, fileLink } from '../explorer-links.mjs'
 import ExplorerDir from './ExplorerDir.vue'
 
@@ -50,23 +75,10 @@ watch(mode, v => {
 
 // --- Files tree -----------------------------------------------------
 
-const fileTotals = computed(() => {
-  const byFile = new Map()
-  for (const ns of summary.namespaces) {
-    for (const t of ns.types) {
-      if (!byFile.has(t.file)) byFile.set(t.file, { file: t.file, linesCovered: 0, linesValid: 0 })
-      const f = byFile.get(t.file)
-      f.linesCovered += t.linesCovered
-      f.linesValid += t.linesValid
-    }
-  }
-  return [...byFile.values()]
-})
-
-function buildFileTree(files) {
+function buildFileTree(entries) {
   const root = { dirs: new Map(), files: [] }
-  for (const f of files) {
-    const parts = f.file.split('/')
+  for (const f of entries) {
+    const parts = f.path.split('/')
     let node = root
     let path = ''
     for (let i = 0; i < parts.length - 1; i++) {
@@ -74,18 +86,24 @@ function buildFileTree(files) {
       if (!node.dirs.has(parts[i])) node.dirs.set(parts[i], { name: parts[i], path, dirs: new Map(), files: [] })
       node = node.dirs.get(parts[i])
     }
-    node.files.push({ name: parts[parts.length - 1], ...f })
+    node.files.push({ name: parts[parts.length - 1], file: f.path, linesCovered: f.linesCovered, linesValid: f.linesValid, measured: f.measured })
   }
   return root
 }
 
+// Recurses depth-first, keeping each directory's own name/path alongside
+// its now-sorted children - a plain `.map(sortTree)` would replace each
+// directory with sortTree's return value, which only has {dirs, files},
+// silently dropping name/path from every level but the leaves.
 function sortTree(node) {
-  const dirs = [...node.dirs.values()].sort((a, b) => a.name.localeCompare(b.name)).map(sortTree)
+  const dirs = [...node.dirs.values()]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(d => ({ ...d, ...sortTree(d) }))
   const files = [...node.files].sort((a, b) => a.name.localeCompare(b.name))
   return { dirs, files }
 }
 
-const fileTree = computed(() => sortTree(buildFileTree(fileTotals.value)))
+const fileTree = computed(() => sortTree(buildFileTree(files)))
 
 // --- Outline tree -----------------------------------------------------
 
@@ -129,12 +147,21 @@ function isActiveLine(file, line) {
         <ExplorerDir v-if="mode === 'files'" :dir="fileTree" />
 
         <template v-else>
-          <details v-for="ns in outline" :key="ns.name" class="tree-node" open>
-            <summary class="tree-label">{{ ns.name }}</summary>
+          <details v-for="ns in outline" :key="ns.name" class="tree-node">
+            <summary class="tree-label">
+              <span class="tree-toggle"></span>
+              {{ ns.name }}
+            </summary>
             <div class="tree-children">
               <details v-for="t in ns.types" :key="t.name" class="tree-node">
                 <summary class="tree-label">
-                  <a class="tree-link" :class="{ active: isActiveLine(t.file, t.startLine) }" :href="fileLink(t.file, t.startLine)">{{ t.name }}</a>
+                  <span class="tree-toggle"></span>
+                  <a
+                    class="tree-link"
+                    :class="{ active: isActiveLine(t.file, t.startLine) }"
+                    :href="fileLink(t.file, t.startLine)"
+                    @click="$event.currentTarget.closest('details').open = true"
+                  >{{ t.name }}</a>
                   <span class="rate-dot" :class="rateClass(t.rate)"></span>
                 </summary>
                 <div class="tree-children">
