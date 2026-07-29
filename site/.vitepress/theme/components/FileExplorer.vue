@@ -59,6 +59,14 @@ const route = useRoute()
 const COLLAPSED_KEY = 'coverage-explorer-collapsed'
 const MODE_KEY = 'coverage-explorer-mode'
 
+// Kept in step with the same breakpoint in style.css. Matched with
+// matchMedia rather than by reading window.innerWidth: on a narrow screen
+// the browser widens the layout viewport to fit an over-wide document, so
+// innerWidth reports the widened value and a width test against it decides
+// there is plenty of room - the very situation the collapse exists to
+// avoid. A media query is evaluated against the device width regardless.
+const EXPLORER_OVERLAY_QUERY = '(max-width: 960px)'
+
 // Matches style.css's un-collapsed default so there's no layout flash
 // before onMounted can read the real state from localStorage/viewport.
 const collapsed = ref(false)
@@ -66,7 +74,9 @@ const mode = ref('files')
 
 onMounted(() => {
   const storedCollapsed = window.localStorage.getItem(COLLAPSED_KEY)
-  collapsed.value = storedCollapsed != null ? storedCollapsed === '1' : window.innerWidth < 960
+  collapsed.value = storedCollapsed != null
+    ? storedCollapsed === '1'
+    : window.matchMedia(EXPLORER_OVERLAY_QUERY).matches
 
   const storedMode = window.localStorage.getItem(MODE_KEY)
   if (storedMode === 'files' || storedMode === 'outline') mode.value = storedMode

@@ -47,6 +47,7 @@ function pct(x) {
 <style scoped>
 .browse-home {
   padding: 0 24px;
+  padding-left: calc(24px + var(--explorer-inset));
   max-width: 640px;
 }
 

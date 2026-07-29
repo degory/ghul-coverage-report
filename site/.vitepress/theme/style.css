@@ -40,9 +40,30 @@ html.explorer-collapsed .VPNav, html.explorer-collapsed .VPPage {
   margin-left: 28px;
 }
 
-@media (max-width: 767px) {
+/* Below the width where a 280px sidebar and a readable content column both
+   fit, the explorer stops reserving space and overlays instead. Reserving
+   it is what forced the document wider than the screen, and a document
+   wider than the screen is what makes a phone or tablet scale the page
+   down to fit - so this has to be a margin change, not just a narrower
+   sidebar. Matches EXPLORER_OVERLAY_QUERY in FileExplorer.vue. */
+/* How much extra left padding a page needs to clear the collapsed explorer
+   rail. Zero while the explorer reserves its own space; the rail's width
+   once it stops (below the breakpoint), because it then overlays the
+   content. Each page adds this to its own left padding - padding rather
+   than a margin on .VPPage, because that content box does not shrink below
+   the viewport, so a margin there would push the document past the screen
+   and reintroduce the very scaling this breakpoint prevents. */
+:root {
+  --explorer-inset: 0px;
+}
+
+@media (max-width: 960px) {
   .VPNav, .VPPage, html.explorer-collapsed .VPNav, html.explorer-collapsed .VPPage {
     margin-left: 0;
+  }
+
+  :root {
+    --explorer-inset: 32px;
   }
 }
 
