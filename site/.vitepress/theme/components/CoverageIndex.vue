@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 const props = defineProps({
   summary: { type: Object, required: true },
@@ -61,7 +61,26 @@ const methodRows = computed(() => {
   return rows
 })
 
-const view = ref('type-desc')
+// The selected view lives in the URL (?view=...), not just component
+// state: state alone resets on every navigation, including the ordinary
+// case of following a row link into a file page and clicking "back". A
+// `replaceState` (not `pushState`) on every change means it never adds its
+// own history entries - by the time a link into a file page is clicked,
+// the current history entry already carries the right `view`, so browser
+// back restores both the selection and (natively) the scroll position.
+function currentView() {
+  if (typeof window === 'undefined') return 'type-desc'
+  return new URLSearchParams(window.location.search).get('view') || 'type-desc'
+}
+
+const view = ref(currentView())
+
+watch(view, newView => {
+  if (typeof window === 'undefined') return
+  const url = new URL(window.location.href)
+  url.searchParams.set('view', newView)
+  window.history.replaceState(window.history.state, '', url)
+})
 
 const sortedTypeRows = computed(() => {
   const ascending = view.value === 'type-asc'
@@ -197,7 +216,8 @@ const branchRate = computed(() => rate(totals.value.branchesCovered, totals.valu
 
 .method-group h3 {
   margin-bottom: 4px;
-  font-family: var(--vp-font-family-mono);
+  font-family: 'Fira Code', var(--vp-font-family-mono);
+  font-feature-settings: 'calt' 1, 'liga' 1, 'ss07' 1;
   font-size: 14px;
 }
 </style>

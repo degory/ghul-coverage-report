@@ -1,0 +1,22 @@
+/* Fira Code (variable), with ligatures - including ss07's `=~` / `!~` -
+   enabled wherever it's applied. Ported from ghul-dev's
+   src/.vitepress/theme/style.css; if ghul-dev changes font/version, port
+   the change here too. */
+@font-face {
+  font-family: 'Fira Code';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300 700;
+  src: url('https://cdn.jsdelivr.net/npm/firacode@6.2.0/distr/woff2/FiraCode-VF.woff2') format('woff2');
+}
+
+/* This report is data-dense (wide source lines, wide tables), not prose -
+   both pages use `layout: page` frontmatter to opt out of VitePress's
+   default `doc` layout, which caps its content column at ~752px for
+   reading-width prose. `page` layout has no such cap on its own, but
+   still sits inside VPPage's default padding; widen that to use most of
+   the viewport instead. */
+.VPPage .vp-page {
+  max-width: none;
+  padding: 0 24px;
+}

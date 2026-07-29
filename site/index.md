@@ -1,5 +1,6 @@
 ---
 title: Coverage report
+layout: page
 ---
 
 <script setup>

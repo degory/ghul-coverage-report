@@ -33,33 +33,43 @@ function walk(dir, out) {
 // just an index on each covered segment, rather than embedding the full
 // {description, kindLabel, signatureLines} object at every occurrence
 // (which OOM'd the build across 489 pages worth of near-identical data).
+//
+// Two passes, deliberately: assigning each unique key's table index has to
+// happen synchronously, before any `await`. Reserving `table.length` as an
+// entry's index and then `push`-ing it only after an awaited
+// tokenizeSignature() call raced under Promise.all - multiple concurrent
+// entries could all read the same not-yet-pushed-to length, hand out the
+// same index, and then push out of order, silently scrambling which
+// description ended up at which index (surfaced as most hovers in a file
+// showing one arbitrary, unrelated entry's text).
 async function buildHoverTable(hovers) {
-  const table = []
+  const keyOf = h => `${h.kindLabel ?? ''}|||${h.description ?? ''}`
+
   const indexByKey = new Map()
+  const uniqueEntries = []
 
-  const withIndex = await Promise.all((hovers ?? []).map(async h => {
-    const key = `${h.kindLabel ?? ''}|||${h.description ?? ''}`
-    let hoverIndex = indexByKey.get(key)
-
-    if (hoverIndex === undefined) {
-      hoverIndex = table.length
-      indexByKey.set(key, hoverIndex)
-      table.push({
-        kindLabel: h.kindLabel ?? '',
-        signatureLines: await tokenizeSignature(h.description ?? ''),
-      })
+  for (const h of hovers ?? []) {
+    const key = keyOf(h)
+    if (!indexByKey.has(key)) {
+      indexByKey.set(key, uniqueEntries.length)
+      uniqueEntries.push(h)
     }
+  }
 
-    return {
-      startLine: h.startLine,
-      startColumn: h.startColumn,
-      endLine: h.endLine,
-      endColumn: h.endColumn,
-      hoverIndex,
-    }
+  const table = await Promise.all(uniqueEntries.map(async h => ({
+    kindLabel: h.kindLabel ?? '',
+    signatureLines: await tokenizeSignature(h.description ?? ''),
+  })))
+
+  const spans = (hovers ?? []).map(h => ({
+    startLine: h.startLine,
+    startColumn: h.startColumn,
+    endLine: h.endLine,
+    endColumn: h.endColumn,
+    hoverIndex: indexByKey.get(keyOf(h)),
   }))
 
-  return { table, spans: withIndex }
+  return { table, spans }
 }
 
 export default {

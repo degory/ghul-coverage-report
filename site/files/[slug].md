@@ -1,5 +1,6 @@
 ---
 title: "{{ $params.path }}"
+layout: page
 ---
 
 <script setup>

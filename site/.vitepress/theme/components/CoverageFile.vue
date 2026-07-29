@@ -75,6 +75,7 @@ function onLeave(segment) {
 
 <template>
   <div class="coverage-file">
+    <a class="back-link" href="/">&larr; Back to report</a>
     <h1 class="file-path">{{ path }}</h1>
     <table class="coverage-source">
       <tbody>
@@ -116,8 +117,15 @@ function onLeave(segment) {
 </template>
 
 <style scoped>
+.back-link {
+  display: inline-block;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
 .file-path {
-  font-family: var(--vp-font-family-mono);
+  font-family: 'Fira Code', var(--vp-font-family-mono);
+  font-feature-settings: 'calt' 1, 'liga' 1, 'ss07' 1;
   font-size: 16px;
   word-break: break-all;
 }
@@ -125,9 +133,15 @@ function onLeave(segment) {
 .coverage-source {
   width: 100%;
   border-collapse: collapse;
-  font-family: var(--vp-font-family-mono);
+  font-family: 'Fira Code', var(--vp-font-family-mono);
+  font-feature-settings: 'calt' 1, 'liga' 1, 'ss07' 1;
   font-size: 13px;
   line-height: 1.5;
+}
+
+.ln, .hits, .branch, .text {
+  line-height: 1.5;
+  vertical-align: top;
 }
 
 .ln, .hits, .branch {
@@ -136,7 +150,6 @@ function onLeave(segment) {
   color: var(--vp-c-text-3);
   user-select: none;
   white-space: nowrap;
-  vertical-align: top;
 }
 
 .text {
@@ -145,12 +158,14 @@ function onLeave(segment) {
 
 .line-text {
   white-space: pre;
+  /* A wholly empty line has no inline content to anchor a line box to, so
+     the row collapses shorter than its neighbours without this - blank
+     source lines are common enough to matter. */
+  min-height: 1.5em;
 }
 
 .has-hover {
-  cursor: help;
-  text-decoration: underline dotted rgba(128, 128, 128, 0.6);
-  text-underline-offset: 3px;
+  cursor: default;
 }
 
 .cov-hit {
@@ -170,7 +185,8 @@ function onLeave(segment) {
   border-radius: 6px;
   padding: 8px 12px;
   box-shadow: var(--vp-shadow-3);
-  font-family: var(--vp-font-family-mono);
+  font-family: 'Fira Code', var(--vp-font-family-mono);
+  font-feature-settings: 'calt' 1, 'liga' 1, 'ss07' 1;
   font-size: 13px;
 }
 
