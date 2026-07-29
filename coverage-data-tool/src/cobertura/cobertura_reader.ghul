@@ -13,10 +13,21 @@ namespace Cobertura is
     // be merged by calling this once per report against the same map.
     //
     // Cobertura's own `filename` attribute is relative to whatever
-    // directory coverlet was pointed at (ghūl's own pipeline instruments
-    // from `src/`); `source_prefix` re-keys it to be relative to the
-    // analyser's own working directory instead (the project directory),
-    // since that's what the analysis protocol's file paths use.
+    // directory coverlet was pointed at for *that* report - and different
+    // suites point coverlet at different roots (observed directly across
+    // ghul's own suites: the unit suite's <source> is the project's
+    // `src/`, so filenames already read like `analysis/foo.ghul`; the
+    // analysis suite's <source> is the repo root, so filenames read
+    // `src/analysis/foo.ghul` - already carrying the prefix - and also
+    // include entries for the analysis-tests project itself, which are
+    // simply never claimed by anything (the tree builder only pulls
+    // coverage for files the analyser actually opened, all of them under
+    // `-sourceprefix`), no special-case filtering needed.
+    //
+    // Blindly prepending `source_prefix` to every report's filenames,
+    // uniformly, would double it for reports where it's already baked in
+    // (`src/src/analysis/foo.ghul`) - so read each report's own declared
+    // <source> and only prepend when it isn't already there.
     class COBERTURA_READER is
         init() is si
 
@@ -24,9 +35,11 @@ namespace Cobertura is
             let document = XDocument.load(report_path);
             let root = document.root!;
 
+            let effective_prefix = _effective_prefix(_declared_source(root), source_prefix);
+
             for class_element in root.descendants(XName.get("class")) do
                 let raw_filename = class_element.attribute(XName.get("filename"))!.value;
-                let filename = if source_prefix.length > 0 then "{source_prefix}/{raw_filename}" else raw_filename fi;
+                let filename = if effective_prefix.length > 0 then "{effective_prefix}/{raw_filename}" else raw_filename fi;
 
                 if !into.contains_key(filename) then
                     into[filename] = MAP[int, LINE_COVERAGE]();
@@ -65,6 +78,45 @@ namespace Cobertura is
                     od
                 fi
             od
+        si
+
+        // The report's own declared source root (<sources><source>...),
+        // trimmed of a trailing slash; empty if absent/malformed.
+        _declared_source(root: System.Xml.Linq.XElement) -> string is
+            let sources_element = root.element(XName.get("sources"));
+
+            if !sources_element? then
+                return "";
+            fi
+
+            let source_element = sources_element.element(XName.get("source"));
+
+            if !source_element? then
+                return "";
+            fi
+
+            return source_element.value.trim_end(['/', '\\']);
+        si
+
+        // Two shapes observed across ghul's own suites: when a report's
+        // <source> root IS the prefix directory itself (".../src", from
+        // the unit suite's in-process VSTest collector), its filenames are
+        // bare ("analysis/foo.ghul") and need the prefix prepended to
+        // match the analyser's own relative paths. When <source> is
+        // something else (the repo root, from the out-of-process
+        // coverlet.console suites), filenames already carry their own
+        // leading segment ("src/analysis/foo.ghul") and nothing should be
+        // prepended - prepending again would double it.
+        _effective_prefix(declared_source: string, source_prefix: string) -> string is
+            if source_prefix.length == 0 then
+                return "";
+            fi
+
+            if declared_source.ends_with("/{source_prefix}") \/ declared_source =~ source_prefix then
+                return source_prefix;
+            fi
+
+            return "";
         si
 
         // condition-coverage reads e.g. "37% (3/8)" or is absent; extract
