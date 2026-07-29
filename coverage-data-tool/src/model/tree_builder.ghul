@@ -9,7 +9,10 @@ namespace Coverage.Model is
 
     // Where a covered line was attributed to: the innermost enclosing
     // method/property/constructor/function symbol.
-    class OWNER_MATCH(namespace_name: string, type_name: string, member_name: string, start_line: int);
+    // `member_name` is the bare identifier, for display in a column or a
+    // tree row; `signature` is the analyser's full description of the
+    // declaration, which is what distinguishes one overload from another.
+    class OWNER_MATCH(namespace_name: string, type_name: string, member_name: string, signature: string, start_line: int);
 
     // LSP SymbolKind values the analyser reports on SYMBOL_DTO.kind
     // (Analysis.Protocol, mirroring Semantic.Symbols.SymbolKind).
@@ -65,7 +68,7 @@ namespace Coverage.Model is
                     fi
 
                     let type_coverage = types[type_key];
-                    let method_coverage = type_coverage.find_or_add_method(owner.member_name, path, owner.start_line);
+                    let method_coverage = type_coverage.find_or_add_method(owner.member_name, owner.signature, path, owner.start_line);
 
                     method_coverage.add_line(coverage.hits, coverage.is_branch, coverage.branch_covered, coverage.branch_total);
                 od
@@ -132,7 +135,13 @@ namespace Coverage.Model is
                     _split_owner(best.qualifier)
                 fi;
 
-            return OWNER_MATCH(namespace_name, type_name, _leading_identifier(best.search_description), best.start_line);
+            return OWNER_MATCH(
+                namespace_name,
+                type_name,
+                _leading_identifier(best.search_description),
+                best.search_description,
+                best.start_line
+            );
         si
 
         // search_description is a full declaration description for some

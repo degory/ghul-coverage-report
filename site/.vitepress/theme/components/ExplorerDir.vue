@@ -31,6 +31,10 @@ function isActive(file) {
   </details>
   <div v-for="f in dir.files" :key="f.file" class="tree-leaf">
     <a class="tree-link" :class="{ active: isActive(f.file) }" :href="fileLink(f.file)">{{ f.name }}</a>
-    <span class="rate-dot" :class="rateClass(rate(f.linesCovered, f.linesValid), f.measured)" :title="f.measured ? '' : 'no suite touched this file'"></span>
+    <span
+      class="rate-dot"
+      :class="rateClass(rate(f.linesCovered, f.linesValid), f.measured)"
+      :title="f.measured ? '' : 'no suite touched this file'"
+    ></span>
   </div>
 </template>

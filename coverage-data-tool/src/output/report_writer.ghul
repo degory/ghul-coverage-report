@@ -123,7 +123,7 @@ namespace Coverage.Output is
                     for m in t.methods do
                         method_dtos.add(
                             METHOD_DTO(
-                                m.name, m.file, m.start_line,
+                                m.name, m.signature, m.file, m.start_line,
                                 m.lines_covered, m.lines_valid, m.branches_covered, m.branches_valid
                             )
                         );

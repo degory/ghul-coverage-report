@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { withBase } from 'vitepress'
+import { coverageMode } from '../coverage-mode.mjs'
 
 const props = defineProps({
   summary: { type: Object, required: true },
@@ -53,6 +54,7 @@ const methodRows = computed(() => {
           namespace: ns.name,
           type: t.name || '(global functions)',
           method: m.name,
+          signature: m.signature,
           file: m.file,
           startLine: m.startLine,
           linesCovered: m.linesCovered,
@@ -67,31 +69,47 @@ const methodRows = computed(() => {
   return rows
 })
 
-// The selected view lives in the URL (?view=...), not just component
-// state: state alone resets on every navigation, including the ordinary
-// case of following a row link into a file page and clicking "back". A
-// `replaceState` (not `pushState`) on every change means it never adds its
-// own history entries - by the time a link into a file page is clicked,
-// the current history entry already carries the right `view`, so browser
-// back restores both the selection and (natively) the scroll position.
-function currentView() {
-  if (typeof window === 'undefined') return 'type-desc'
-  return new URLSearchParams(window.location.search).get('view') || 'type-desc'
+// Grouping and ordering live in the URL (?group=, ?order=), not just
+// component state: state alone resets on every navigation, including the
+// ordinary case of following a row link into a file page and clicking
+// "back". A `replaceState` (not `pushState`) on every change means it
+// never adds its own history entries - by the time a link into a file page
+// is clicked, the current history entry already carries them, so browser
+// back restores the selection and (natively) the scroll position.
+function param(name, fallback) {
+  if (typeof window === 'undefined') return fallback
+  return new URLSearchParams(window.location.search).get(name) || fallback
 }
 
-const view = ref(currentView())
+// Default is worst-first by *absolute* missed lines, the ordering JaCoCo
+// opens on. Percentage-ordering is the obvious choice and the wrong one:
+// it puts a three-line 0% helper above a four-hundred-line 60% core class,
+// where the second is far more of the project's untested surface. Ordering
+// by rate is still offered, it just isn't what you land on.
+const group = ref(param('group', 'type'))
+const order = ref(param('order', 'missed'))
 
-watch(view, newView => {
+function syncUrl(name, value) {
   if (typeof window === 'undefined') return
   const url = new URL(window.location.href)
-  url.searchParams.set('view', newView)
+  url.searchParams.set(name, value)
   window.history.replaceState(window.history.state, '', url)
-})
+}
 
-const sortedTypeRows = computed(() => {
-  const ascending = view.value === 'type-asc'
-  return [...typeRows.value].sort((a, b) => ascending ? a.rate - b.rate : b.rate - a.rate)
-})
+watch(group, v => syncUrl('group', v))
+watch(order, v => syncUrl('order', v))
+
+function missed(row) {
+  return row.linesValid - row.linesCovered
+}
+
+function compare(a, b) {
+  if (order.value === 'missed') return missed(b) - missed(a)
+  if (order.value === 'rate-asc') return a.rate - b.rate
+  return b.rate - a.rate
+}
+
+const sortedTypeRows = computed(() => [...typeRows.value].sort(compare))
 
 const fileRows = computed(() => {
   const byFile = new Map()
@@ -114,14 +132,10 @@ const fileRows = computed(() => {
   return [...byFile.values()].map(f => ({ ...f, rate: rate(f.linesCovered, f.linesValid) }))
 })
 
-const sortedFileRows = computed(() => {
-  const ascending = view.value === 'file-asc'
-  return [...fileRows.value].sort((a, b) => ascending ? a.rate - b.rate : b.rate - a.rate)
-})
+const sortedFileRows = computed(() => [...fileRows.value].sort(compare))
 
 const groupedMethodRows = computed(() => {
-  const dir = view.value === 'method-asc' ? 1 : -1
-  const rows = [...methodRows.value].sort((a, b) => dir * (a.rate - b.rate))
+  const rows = [...methodRows.value].sort(compare)
 
   const groups = new Map()
   for (const r of rows) {
@@ -132,13 +146,9 @@ const groupedMethodRows = computed(() => {
     groups.get(key).rows.push(r)
   }
 
-  const groupList = [...groups.values()]
-  groupList.sort((a, b) => {
-    const ar = a.rows[0]?.rate ?? 0
-    const br = b.rows[0]?.rate ?? 0
-    return dir === 1 ? ar - br : br - ar
-  })
-  return groupList
+  // Each group ranks by its own best-ranked member, so the ordering the
+  // rows were just given carries up to the groups containing them.
+  return [...groups.values()].sort((a, b) => compare(a.rows[0], b.rows[0]))
 })
 
 const totals = computed(() => props.summary.totals)
@@ -148,6 +158,8 @@ const branchRate = computed(() => rate(totals.value.branchesCovered, totals.valu
 
 <template>
   <div class="coverage-index">
+    <button class="browse-link" @click="coverageMode = false">&larr; Browse source</button>
+
     <div class="headline">
       <div class="card">
         <div class="label">Line coverage</div>
@@ -161,39 +173,48 @@ const branchRate = computed(() => rate(totals.value.branchesCovered, totals.valu
       </div>
     </div>
 
-    <label class="view-select">
-      View:
-      <select v-model="view">
-        <option value="type-desc">By type, descending</option>
-        <option value="type-asc">By type, ascending</option>
-        <option value="method-desc">By method, grouped by namespace/type, descending</option>
-        <option value="method-asc">By method, grouped by namespace/type, ascending</option>
-        <option value="file-desc">By file, descending</option>
-        <option value="file-asc">By file, ascending</option>
-      </select>
-    </label>
+    <div class="view-select">
+      <label>
+        Group by:
+        <select v-model="group">
+          <option value="type">Type</option>
+          <option value="file">File</option>
+          <option value="method">Method, grouped by namespace/type</option>
+        </select>
+      </label>
+      <label>
+        Order by:
+        <select v-model="order">
+          <option value="missed">Most uncovered lines first</option>
+          <option value="rate-asc">Lowest coverage first</option>
+          <option value="rate-desc">Highest coverage first</option>
+        </select>
+      </label>
+    </div>
 
-    <table v-if="view === 'type-desc' || view === 'type-asc'" class="coverage-table">
+    <table v-if="group === 'type'" class="coverage-table">
       <thead>
-        <tr><th>Type</th><th>Namespace</th><th>Lines</th><th>Branches</th></tr>
+        <tr><th>Type</th><th>Namespace</th><th class="num">Missed</th><th>Lines</th><th>Branches</th></tr>
       </thead>
       <tbody>
         <tr v-for="row in sortedTypeRows" :key="row.namespace + '.' + row.type">
           <td><a :href="fileLink(row.file, row.startLine)">{{ row.type }}</a></td>
           <td>{{ row.namespace }}</td>
+          <td class="num">{{ missed(row) || '' }}</td>
           <td>{{ pct(row.rate) }} ({{ row.linesCovered }}/{{ row.linesValid }})</td>
           <td>{{ row.branchesValid ? pct(row.branchesCovered / row.branchesValid) : '—' }}</td>
         </tr>
       </tbody>
     </table>
 
-    <table v-else-if="view === 'file-desc' || view === 'file-asc'" class="coverage-table">
+    <table v-else-if="group === 'file'" class="coverage-table">
       <thead>
-        <tr><th>File</th><th>Lines</th><th>Branches</th></tr>
+        <tr><th>File</th><th class="num">Missed</th><th>Lines</th><th>Branches</th></tr>
       </thead>
       <tbody>
         <tr v-for="row in sortedFileRows" :key="row.file">
           <td class="mono-cell"><a :href="fileLink(row.file)">{{ row.file }}</a></td>
+          <td class="num">{{ missed(row) || '' }}</td>
           <td>{{ pct(row.rate) }} ({{ row.linesCovered }}/{{ row.linesValid }})</td>
           <td>{{ row.branchesValid ? pct(row.branchesCovered / row.branchesValid) : '—' }}</td>
         </tr>
@@ -203,10 +224,11 @@ const branchRate = computed(() => rate(totals.value.branchesCovered, totals.valu
     <div v-else v-for="group in groupedMethodRows" :key="group.namespace + '.' + group.type" class="method-group">
       <h3>{{ group.namespace }}.{{ group.type }}</h3>
       <table class="coverage-table">
-        <thead><tr><th>Method</th><th>Lines</th><th>Branches</th></tr></thead>
+        <thead><tr><th>Method</th><th class="num">Missed</th><th>Lines</th><th>Branches</th></tr></thead>
         <tbody>
           <tr v-for="row in group.rows" :key="row.file + row.startLine + row.method">
-            <td><a :href="fileLink(row.file, row.startLine)">{{ row.method }}</a></td>
+            <td><a :href="fileLink(row.file, row.startLine)" :title="row.signature">{{ row.method }}</a></td>
+            <td class="num">{{ missed(row) || '' }}</td>
             <td>{{ pct(row.rate) }} ({{ row.linesCovered }}/{{ row.linesValid }})</td>
             <td>{{ row.branchesValid ? pct(row.branchesCovered / row.branchesValid) : '—' }}</td>
           </tr>
@@ -228,6 +250,24 @@ const branchRate = computed(() => rate(totals.value.branchesCovered, totals.valu
 }
 
 .coverage-index a:hover {
+  text-decoration-color: currentColor;
+}
+
+.browse-link {
+  display: inline-block;
+  margin-bottom: 12px;
+  font-size: 14px;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--vp-c-brand-1);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--vp-c-divider);
+  text-underline-offset: 2px;
+}
+
+.browse-link:hover {
   text-decoration-color: currentColor;
 }
 
@@ -259,8 +299,20 @@ const branchRate = computed(() => rate(totals.value.branchesCovered, totals.valu
 }
 
 .view-select {
-  display: block;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
   margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.view-select select {
+  margin-left: 4px;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .coverage-table {
@@ -273,6 +325,11 @@ const branchRate = computed(() => rate(totals.value.branchesCovered, totals.valu
   text-align: left;
   padding: 4px 8px;
   border-bottom: 1px solid var(--vp-c-divider);
+}
+
+/* After the shared rule above, so the numeric column wins over it. */
+.coverage-table th.num, .coverage-table td.num {
+  text-align: right;
 }
 
 .mono-cell {
