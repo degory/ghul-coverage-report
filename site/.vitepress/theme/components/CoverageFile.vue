@@ -12,6 +12,7 @@
 // source* (safe to format normally) while still rendering the *data*
 // (each segment's own text) literally via the CSS property.
 import { ref } from 'vue'
+import { withBase } from 'vitepress'
 
 const props = defineProps({
   path: { type: String, required: true },
@@ -75,7 +76,7 @@ function onLeave(segment) {
 
 <template>
   <div class="coverage-file">
-    <a class="back-link" href="/">&larr; Back to report</a>
+    <a class="back-link" :href="withBase('/')">&larr; Back to report</a>
     <h1 class="file-path">{{ path }}</h1>
     <table class="coverage-source">
       <tbody>

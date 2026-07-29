@@ -5,6 +5,12 @@ export default defineConfig({
   description: 'Coverage report for a ghūl project',
   cleanUrls: true,
 
+  // Deployed as a GitHub Pages *project* site (degory.github.io/<repo>/,
+  // not a user/org root page or a custom domain), so every asset and
+  // route needs this prefix - VitePress doesn't infer it from where the
+  // site ends up being served.
+  base: '/ghul-coverage-report/',
+
   themeConfig: {
     nav: [{ text: 'Report', link: '/' }],
   },

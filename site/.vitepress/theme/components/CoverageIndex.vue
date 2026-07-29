@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { withBase } from 'vitepress'
 
 const props = defineProps({
   summary: { type: Object, required: true },
@@ -14,9 +15,13 @@ function pct(x) {
 }
 
 // Matches the flattening files/[slug].paths.js uses to name each
-// generated file page.
-function slugFor(file) {
-  return file.replace(/\//g, '__').replace(/\.ghul$/, '')
+// generated file page. withBase() prepends the site's deploy-time base
+// path (vitepress.config.mts) - this is a GitHub Pages *project* site
+// (degory.github.io/<repo>/), so an unprefixed absolute path resolves to
+// the wrong origin-root URL entirely.
+function fileLink(file, line) {
+  const slug = file.replace(/\//g, '__').replace(/\.ghul$/, '')
+  return withBase(`/files/${slug}${line ? '#L' + line : ''}`)
 }
 
 const typeRows = computed(() => {
@@ -146,7 +151,7 @@ const branchRate = computed(() => rate(totals.value.branchesCovered, totals.valu
       </thead>
       <tbody>
         <tr v-for="row in sortedTypeRows" :key="row.namespace + '.' + row.type">
-          <td><a :href="`/files/${slugFor(row.file)}${row.startLine ? '#L' + row.startLine : ''}`">{{ row.type }}</a></td>
+          <td><a :href="fileLink(row.file, row.startLine)">{{ row.type }}</a></td>
           <td>{{ row.namespace }}</td>
           <td>{{ pct(row.rate) }} ({{ row.linesCovered }}/{{ row.linesValid }})</td>
           <td>{{ row.branchesValid ? pct(row.branchesCovered / row.branchesValid) : '—' }}</td>
@@ -160,7 +165,7 @@ const branchRate = computed(() => rate(totals.value.branchesCovered, totals.valu
         <thead><tr><th>Method</th><th>Lines</th><th>Branches</th></tr></thead>
         <tbody>
           <tr v-for="row in group.rows" :key="row.file + row.startLine + row.method">
-            <td><a :href="`/files/${slugFor(row.file)}#L${row.startLine}`">{{ row.method }}</a></td>
+            <td><a :href="fileLink(row.file, row.startLine)">{{ row.method }}</a></td>
             <td>{{ pct(row.rate) }} ({{ row.linesCovered }}/{{ row.linesValid }})</td>
             <td>{{ row.branchesValid ? pct(row.branchesCovered / row.branchesValid) : '—' }}</td>
           </tr>
