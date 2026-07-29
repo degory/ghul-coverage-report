@@ -11,6 +11,7 @@ namespace Coverage.Session is
 
     use IO.Path;
     use IO.File;
+    use IO.Std;
     use IO.Directory;
 
     use Analysis.Protocol.EDIT_FILE;
@@ -42,11 +43,21 @@ namespace Coverage.Session is
 
             let assemblies_json = Path.combine(project_directory, ".assemblies.json");
 
-            if !File.exists(assemblies_json) then
+            // Regenerated every run, not merely required to exist: it is a
+            // build artifact of whatever the target project's references
+            // resolved to the last time someone built it, and nothing keeps
+            // it in step with a package bump afterwards. A stale one is
+            // worse than a missing one, because it produces an analyser that
+            // looks healthy and answers wrongly - referencing a runtime
+            // older than the compiler needs leaves the intrinsics
+            // unregistered, so basic operators fail to resolve, the failure
+            // is swallowed per file, and every declaration past the first
+            // failure in a file reports its types as unresolved. A report
+            // built from that would silently mis-attribute coverage.
+            if !_generate_assemblies_json(project_directory) /\ !File.exists(assemblies_json) then
                 throw Exception(
-                    "{assemblies_json} not found - run "
-                    "'dotnet build -verbosity:quiet -t:GenerateAssembliesJson' "
-                    "in {project_directory} first"
+                    "could not produce {assemblies_json} - is {project_directory} "
+                    "a ghūl project with its dotnet tools restored?"
                 );
             fi
 
@@ -108,6 +119,41 @@ namespace Coverage.Session is
             if !isa Response.LISTEN(first) then
                 throw Exception("expected listen as the analyser's first response.\nstderr so far:\n{_stderr_capture}");
             fi
+        si
+
+        // Ask MSBuild to write the target project's reference-assembly
+        // list; the target ships in the ghūl runtime's build targets.
+        // Returns whether it succeeded - a failure leaves whatever stale
+        // file was already there, which the caller has to know about.
+        _generate_assemblies_json(project_directory: string) -> bool static is
+            let start_info = ProcessStartInfo();
+
+            start_info.file_name = "dotnet";
+            start_info.arguments = "build -verbosity:quiet -t:GenerateAssembliesJson";
+            start_info.working_directory = project_directory;
+
+            start_info.use_shell_execute = false;
+            start_info.redirect_standard_output = true;
+            start_info.redirect_standard_error = true;
+
+            let process = Process.start(start_info);
+
+            if !process? then
+                return false;
+            fi
+
+            process.standard_output.read_to_end();
+            let errors = process.standard_error.read_to_end();
+
+            if !process.wait_for_exit(120000) \/ process.exit_code != 0 then
+                Std.error.write_line(
+                    "could not regenerate {project_directory}/.assemblies.json; "
+                    "continuing with whatever reference list is already there\n{errors}"
+                );
+                return false;
+            fi
+
+            return true;
         si
 
         // Read every "-a <path>" assembly reference out of .assemblies.json
