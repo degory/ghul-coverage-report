@@ -11,6 +11,7 @@ namespace Coverage.Session is
 
     use IO.Path;
     use IO.File;
+    use IO.Directory;
 
     use Analysis.Protocol.EDIT_FILE;
     use Analysis.Protocol.Request;
@@ -49,7 +50,7 @@ namespace Coverage.Session is
                 );
             fi
 
-            let arguments = _build_arguments(assemblies_json);
+            let arguments = _build_arguments(project_directory, assemblies_json);
 
             _response_file = Path.combine(project_directory, ".coverage-data-tool-{System.Guid.new_guid()}.rsp");
 
@@ -110,9 +111,13 @@ namespace Coverage.Session is
         si
 
         // Read every "-a <path>" assembly reference out of .assemblies.json
-        // (a flat { "assemblies": [...] } string array) and append the
-        // analyse flag.
-        _build_arguments(assemblies_json_path: string) -> LIST[string] static is
+        // (a flat { "assemblies": [...] } string array), forward whatever
+        // extra compiler flags the project's own .ghulproj declares as
+        // required (e.g. ghul's own --underscore-access legacy - without
+        // it, its self-hosted legacy cross-class `_`-member accesses
+        // report as inaccessible and analysis limps along noisily), and
+        // append the analyse flag.
+        _build_arguments(project_directory: string, assemblies_json_path: string) -> LIST[string] static is
             let json = File.read_all_text(assemblies_json_path);
 
             let open_bracket = json.index_of('[');
@@ -133,7 +138,92 @@ namespace Coverage.Session is
                 od
             fi
 
+            for option in _load_ghulproj_compiler_options(project_directory) do
+                result.add(option);
+            od
+
             result.add("-A");
+
+            return result;
+        si
+
+        // Mirrors the command-line build: forward the .ghulproj's own
+        // <GhulCompiler> extra arguments (everything after the
+        // "ghul-compiler" program name) and every unconditional
+        // <GhulOptions Include="..."> item. Ported from ghul-mcp's
+        // src/analyser/session.ghul (same reasoning, same approach).
+        _load_ghulproj_compiler_options(project_directory: string) -> LIST[string] static is
+            let result = LIST[string]();
+            let projects = Directory.get_files(project_directory, "*.ghulproj");
+
+            if projects.count != 1 then
+                return result;
+            fi
+
+            try
+                let document = System.Xml.Linq.XDocument.load(projects[0]);
+                let root = document.root;
+
+                if !root? then
+                    return result;
+                fi
+
+                for element in root.descendants(System.Xml.Linq.XName.get("GhulCompiler")) do
+                    let seen_program mut = false;
+
+                    for token in _tokenize(element.value) do
+                        if seen_program then
+                            result.add(token);
+                        elif token.ends_with("ghul-compiler") then
+                            seen_program = true;
+                        fi
+                    od
+                od
+
+                for element in root.descendants(System.Xml.Linq.XName.get("GhulOptions")) do
+                    let condition_attribute = element.attribute(System.Xml.Linq.XName.get("Condition"));
+
+                    if !condition_attribute? then
+                        let include_attribute = element.attribute(System.Xml.Linq.XName.get("Include"));
+
+                        if include_attribute? then
+                            for token in _tokenize(include_attribute.value) do
+                                result.add(token);
+                            od
+                        fi
+                    fi
+                od
+
+                return result;
+            catch ex: Exception
+                return result;
+            yrt
+        si
+
+        // Split a command fragment on runs of whitespace, dropping empties.
+        _tokenize(text: string?) -> LIST[string] static is
+            let result = LIST[string]();
+
+            if !text? then
+                return result;
+            fi
+
+            let current = StringBuilder();
+
+            for c in text do
+                if c == ' ' \/ c == '\t' \/ c == '\n' \/ c == '\r' then
+                    if current.length > 0 then
+                        result.add(current.to_string());
+                        current.clear();
+                    fi
+                else
+                    current.append(c);
+                fi
+            od
+
+            if current.length > 0 then
+                result.add(current.to_string());
+            fi
 
             return result;
         si

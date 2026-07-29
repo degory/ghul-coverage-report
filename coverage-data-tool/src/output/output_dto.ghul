@@ -33,4 +33,11 @@ namespace Coverage.Output is
     class HOVER_DTO(start_line: int, start_column: int, end_line: int, end_column: int, description: string, kind_label: string?);
 
     class FILE_DTO(path: string, lines: LIST[LINE_DTO], semantic_tokens: LIST[TOKEN_DTO], hovers: LIST[HOVER_DTO]);
+
+    // shields.io "endpoint" badge schema (https://shields.io/badges/endpoint-badge)
+    // — a README badge points `img.shields.io/endpoint?url=` at this file
+    // wherever it's deployed, giving a badge in the same visual style as
+    // shields.io's own badges (matching the rest of a repo's README)
+    // without generating an SVG ourselves.
+    class BADGE_DTO(schema_version: int, label: string, message: string, color: string);
 si

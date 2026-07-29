@@ -38,6 +38,35 @@ namespace Coverage.Output is
 
             _write_summary(target_directory, namespaces);
             _write_files(target_directory, file_lines, file_contents, file_tokens, file_hovers);
+            _write_badge(target_directory, namespaces);
+        si
+
+        _write_badge(target_directory: string, namespaces: LIST[NAMESPACE_COVERAGE]) is
+            let lines_covered mut = 0;
+            let lines_valid mut = 0;
+
+            for ns in namespaces do
+                lines_covered = lines_covered + ns.lines_covered;
+                lines_valid = lines_valid + ns.lines_valid;
+            od
+
+            let percent = if lines_valid > 0 then (lines_covered * 100) / lines_valid else 0 fi;
+
+            let color =
+                if percent >= 80 then
+                    "brightgreen"
+                elif percent >= 60 then
+                    "yellow"
+                else
+                    "red"
+                fi;
+
+            let badge = BADGE_DTO(1, "line coverage", "{percent}%", color);
+
+            File.write_all_text(
+                Path.combine(target_directory, "badge.json"),
+                JsonSerializer.serialize[BADGE_DTO](badge, _options)
+            );
         si
 
         _write_summary(target_directory: string, namespaces: LIST[NAMESPACE_COVERAGE]) is
