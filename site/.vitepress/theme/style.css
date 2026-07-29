@@ -53,7 +53,7 @@ html.explorer-collapsed .VPNav, html.explorer-collapsed .VPPage {
 }
 
 /* `.tree-label` is a <summary> element, and `display: flex` (needed to
-   align its link + rate-dot) suppresses a <summary>'s native disclosure
+   align its link + rate bar) suppresses a <summary>'s native disclosure
    triangle in Chromium/Firefox - browsers only draw it under
    `display: list-item`. Turn the native marker off; `.tree-toggle` below
    is the real, sized replacement. */
@@ -163,16 +163,38 @@ html.explorer-collapsed .VPNav, html.explorer-collapsed .VPPage {
   font-weight: 600;
 }
 
-.rate-dot {
+/* Filled to `--fill` (the covered proportion) over a neutral track, so the
+   length carries the ratio and the colour carries only severity. The track
+   is neutral rather than red: most files have some deficit, and it needs to
+   be visible without every row reading as an alarm. */
+/* 34px wide, not the ~20px a dot would occupy: at 20px a 10-point deficit
+   is two pixels of track and reads as solid, which is the confusion the
+   bar exists to remove. The track needs real contrast against the fill for
+   the same reason. */
+.rate-bar {
   flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
+  width: 34px;
+  height: 5px;
   margin-left: auto;
-  box-shadow: 0 0 0 1px var(--vp-c-bg);
+  border-radius: 2px;
+  background:
+    linear-gradient(to right, var(--rate-fill) var(--fill), transparent var(--fill)),
+    color-mix(in srgb, var(--vp-c-text-3) 45%, transparent);
 }
 
-.rate-high { background: #2ea043; }
-.rate-mid { background: #d29922; }
-.rate-low { background: #f85149; }
-.rate-unmeasured { background: transparent; border: 1px solid var(--vp-c-text-3); }
+.rate-high { --rate-fill: #2ea043; }
+.rate-mid { --rate-fill: #d29922; }
+.rate-low { --rate-fill: #f85149; }
+
+/* Exactly 100%: a solid bar is accurate here, and the rounder shape reads
+   as "done" at a glance without having to compare fill lengths. */
+.rate-bar.is-complete {
+  background: #2ea043;
+}
+
+.rate-unmeasured {
+  --rate-fill: transparent;
+  background: repeating-linear-gradient(
+    45deg, var(--vp-c-divider), var(--vp-c-divider) 2px, transparent 2px, transparent 4px
+  );
+}
