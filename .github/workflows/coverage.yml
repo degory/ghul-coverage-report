@@ -26,21 +26,22 @@ jobs:
   coverage:
     name: Capture coverage and build the report
 
-    # Smaller than degory/ghul's integration-test job. Every instrumented
-    # compiler process merges its hit counts through one mutex-guarded
-    # file, so throughput stops tracking core count well before the 16
-    # vCPU that job uses, and the run is billed for size as well as
-    # duration.
-    runs-on: ubicloud-standard-8
+    # A standard GitHub-hosted runner, not Ubicloud: this job isn't part
+    # of any PR gate and only runs twice a week, so the extra wall-clock
+    # time doesn't cost anything that matters, and it avoids depending on
+    # Ubicloud's runner app being scoped to this repo.
+    runs-on: ubuntu-latest
 
-    # Measured on 8 cores: unit a few seconds, analysis a little under 5
-    # minutes, integration a little under 20. Cross-assembly is not yet
-    # measured, but is a smaller suite than integration by test count.
-    # Report generation (analyser-driven highlighting/hover over ~500
-    # files, then the site build) adds a couple of minutes on top. A run
-    # that hits this limit is lost entirely rather than partly salvaged -
-    # keep the headroom generous until a live run gives a real total.
-    timeout-minutes: 45
+    # Generous on a standard runner: unit a few seconds, analysis a
+    # handful of minutes, integration and cross-assembly the bulk of it,
+    # report generation (analyser-driven highlighting/hover over ~500
+    # files, then the site build) a couple of minutes on top. A run that
+    # hits this limit is lost entirely rather than partly salvaged - keep
+    # the headroom generous until a live run gives a real total. Standard
+    # GitHub runners are meaningfully weaker than the 8-core Ubicloud
+    # runners this budget was originally sized for, so doubled rather
+    # than carried over as-is.
+    timeout-minutes: 90
 
     steps:
       - name: Check out ghul-coverage-report
