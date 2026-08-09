@@ -55,6 +55,35 @@ absolute (`${{ github.workspace }}`-rooted) paths across the two checkouts.
 Deploys to this repo's own GitHub Pages, not `degory/ghul`'s — see the
 README for why the checkout direction is this way round.
 
+## Coverage history
+
+`coverage-data-tool/src/history/` records each run on the `coverage-history`
+branch and compares it with the previous one. Four pieces:
+
+- `snapshot_builder.ghul` — flattens the coverage tree to one row per type and
+  one per file. File rows are summed from the type rows, so a file nothing
+  instrumented gets no row rather than a 0/0 one. Methods are deliberately not
+  recorded.
+- `history_store.ghul` — reads and writes the branch. Both files are
+  line-oriented and appended to rather than rewritten, because the directory is
+  a git branch and a rewrite costs a whole new blob every run.
+- `regression_report.ghul` — the markdown that lands in the job summary.
+  Compares line *rate*, not covered lines: code moves between runs, and a type
+  that lost ten covered lines because ten lines were deleted has not regressed.
+- `run_identity.ghul` — provenance, from the standard `GITHUB_*` environment
+  where it exists and self-describing as local where it doesn't.
+
+The site reads none of that. It gets `history.json`, a compact series written
+into the report data directory alongside `summary.json`, and rendered by
+`CoverageTrend.vue`. A run without `-historydir:` still writes an empty
+`history.json`, because the site imports it unconditionally.
+
+Two things to know before changing any of it. The tool is given the history
+directory but never creates the branch, so a fresh clone of the workflow needs
+that branch to exist. And a run on a ref other than `main` records itself
+locally and never pushes — that is what makes an ad-hoc dispatch safe to use
+for trying the pipeline out.
+
 ## Generated data
 
 `site/coverage-data/` (or wherever `-targetdir` points) is git-ignored.

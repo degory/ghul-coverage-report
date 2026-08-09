@@ -26,6 +26,11 @@ jobs:
   coverage:
     name: Capture coverage and build the report
 
+    # Write, because this job pushes the run it just measured to the
+    # coverage-history branch. Nothing else in the repo is written.
+    permissions:
+      contents: write
+
     # A standard GitHub-hosted runner, not Ubicloud: this job isn't part
     # of any PR gate and only runs twice a week, so the extra wall-clock
     # time doesn't cost anything that matters, and it avoids depending on
@@ -54,6 +59,17 @@ jobs:
         with:
           repository: degory/ghul
           path: ghul
+
+      # The series this run appends itself to, and reads its predecessor from.
+      # An orphan branch rather than the run artifacts: those expire after 90
+      # days, and the site build wants the whole series in one cheap fetch
+      # rather than an API round trip per past run. See the branch's own
+      # README for the layout.
+      - name: Check out the coverage history
+        uses: actions/checkout@v6
+        with:
+          ref: coverage-history
+          path: coverage-history
 
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v4
@@ -100,13 +116,53 @@ jobs:
         working-directory: ghul
         run: dotnet build -verbosity:quiet -t:GenerateAssembliesJson
 
+      # Also appends this run to the coverage history and writes the
+      # comparison against the previous run into the job summary. That is the
+      # same pass rather than a separate one because it is the same data: the
+      # tool already holds the coverage tree the snapshot is built from.
       - name: Generate report data
         working-directory: ghul-coverage-report/coverage-data-tool
         run: |
           dotnet run -- \
             "-reports:${{ github.workspace }}/ghul/coverage/*.cobertura.xml" \
             "-project:${{ github.workspace }}/ghul" \
-            "-targetdir:${{ github.workspace }}/ghul-coverage-report/site/coverage-data"
+            "-targetdir:${{ github.workspace }}/ghul-coverage-report/site/coverage-data" \
+            "-historydir:${{ github.workspace }}/coverage-history" \
+            "-measuredcommit:$(git -C "${{ github.workspace }}/ghul" rev-parse HEAD)" \
+            "-summary:$GITHUB_STEP_SUMMARY"
+
+      # Only a run on main records itself. A dispatch on some other ref still
+      # reads the history - so its report and chart look like the real thing -
+      # and simply drops the entry it appended locally.
+      - name: Record this run in the coverage history
+        if: github.ref == 'refs/heads/main'
+        working-directory: coverage-history
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "nothing to record"
+            exit 0
+          fi
+
+          git add -A
+          git commit -m "Record run ${{ github.run_id }}"
+
+          # The workflow's concurrency group serialises scheduled runs, but an
+          # ad-hoc dispatch can still land beside one. Rebasing onto whatever
+          # arrived first keeps both runs in the series - they are different
+          # measurements, not a conflict.
+          for attempt in 1 2 3; do
+            if git pull --rebase origin coverage-history && git push origin HEAD:coverage-history; then
+              exit 0
+            fi
+            echo "push attempt $attempt failed, retrying"
+            sleep 5
+          done
+
+          echo "could not record this run in the coverage history" >&2
+          exit 1
 
       # VitePress copies public/'s contents verbatim to the site root,
       # which is how the badge lands at a stable, predictable deployed
@@ -123,6 +179,7 @@ jobs:
           mkdir -p public/data
           cp coverage-data/badge.json public/badge.json
           cp coverage-data/summary.json coverage-data/files.json public/data/
+          cp coverage-data/history.json public/data/
           cp coverage-data/badge.json public/data/
 
       - name: Install site dependencies
@@ -157,6 +214,7 @@ jobs:
             ghul-coverage-report/site/coverage-data/summary.json
             ghul-coverage-report/site/coverage-data/files.json
             ghul-coverage-report/site/coverage-data/badge.json
+            ghul-coverage-report/site/coverage-data/history.json
           retention-days: 90
 
       - name: Upload coverage report

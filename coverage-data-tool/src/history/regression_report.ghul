@@ -1,0 +1,197 @@
+namespace Coverage.History is
+    use Collections.LIST;
+    use Collections.MAP;
+
+    // Compares a run against the one before it and renders the difference as
+    // markdown, for the workflow to write into its job summary.
+    //
+    // The comparison is on line *rate* rather than on covered lines: between
+    // two runs the code moves, and a type that loses ten covered lines
+    // because ten lines were deleted has not regressed. A rate can still move
+    // for uninteresting reasons on a small site, hence the floor on size.
+    class REGRESSION_REPORT is
+        // A site smaller than this moves too easily to be worth a line in a
+        // report - a single line landing in a five-line type is 20 points.
+        MIN_LINES: int static => 10;
+
+        // Percentage points. Below this is noise from lines moving between
+        // types rather than coverage being lost.
+        MIN_DROP: int static => 1;
+
+        // A regressed run usually regresses in a handful of places; a
+        // methodology change regresses in hundreds, and a job summary listing
+        // them all is unreadable. What is cut is always stated.
+        MAX_ROWS: int static => 20;
+
+        init() is si
+
+        render(
+            previous_run: RUN_DTO?,
+            previous: MAP[string, SITE_DTO],
+            current_run: RUN_DTO,
+            current: LIST[SITE_DTO]
+        ) -> string is
+            let out = System.Text.StringBuilder();
+
+            out.append_line("## Coverage");
+            out.append_line("");
+
+            let now = _rate(current_run.lines_covered, current_run.lines_valid);
+
+            if !previous_run? then
+                out.append_line(
+                    "{_pct(now)} of {current_run.lines_valid} lines. "
+                    "First recorded run - nothing to compare against yet."
+                );
+
+                return out.to_string();
+            fi
+
+            let before = _rate(previous_run.lines_covered, previous_run.lines_valid);
+            let delta = now - before;
+
+            out.append_line(
+                "{_pct(before)} &rarr; **{_pct(now)}** ({_signed(delta)} points) "
+                "against {_reference(previous_run)}, "
+                "{previous_run.timestamp.substring(0, 10)}."
+            );
+            out.append_line("");
+
+            if current_run.note? then
+                out.append_line(
+                    "> This run is annotated: {current_run.note} "
+                    "Its numbers are not comparable with the run before it, so the "
+                    "movement below reflects the change in counting rather than a "
+                    "change in coverage."
+                );
+                out.append_line("");
+            fi
+
+            if previous.count == 0 then
+                out.append_line(
+                    "The previous run's per-site detail is no longer held, so only the "
+                    "headline is compared."
+                );
+
+                return out.to_string();
+            fi
+
+            let regressed_types = LIST[MOVEMENT]();
+            let regressed_files = LIST[MOVEMENT]();
+            let appeared = LIST[MOVEMENT]();
+
+            for site in current do
+                if site.lines_valid < MIN_LINES then
+                    continue;
+                fi
+
+                let is_file = !site.key.contains("::");
+
+                if !previous.contains_key(site.key) then
+                    let rate = _rate(site.lines_covered, site.lines_valid);
+
+                    if !is_file /\ rate < 50.0D then
+                        appeared.add(MOVEMENT(site.key, 0.0D, rate, site.lines_valid));
+                    fi
+
+                    continue;
+                fi
+
+                let was = previous[site.key];
+                let from = _rate(was.lines_covered, was.lines_valid);
+                let to = _rate(site.lines_covered, site.lines_valid);
+
+                if from - to < cast double(MIN_DROP) then
+                    continue;
+                fi
+
+                let movement = MOVEMENT(site.key, from, to, site.lines_valid);
+
+                if is_file then
+                    regressed_files.add(movement);
+                else
+                    regressed_types.add(movement);
+                fi
+            od
+
+            if regressed_types.count == 0 /\ regressed_files.count == 0 then
+                out.append_line("No site lost coverage against the previous run.");
+            else
+                _write_table(out, "Types that lost coverage", regressed_types);
+                _write_table(out, "Files that lost coverage", regressed_files);
+            fi
+
+            if appeared.count > 0 then
+                _write_table(out, "New, and poorly covered", appeared);
+            fi
+
+            return out.to_string();
+        si
+
+        _write_table(out: System.Text.StringBuilder, heading: string, rows: LIST[MOVEMENT]) is
+            if rows.count == 0 then
+                return;
+            fi
+
+            rows.sort(
+                System.Comparison[MOVEMENT](
+                    (a: MOVEMENT, b: MOVEMENT) -> int => (a.to - a.from).compare_to(b.to - b.from)
+                )
+            );
+
+            out.append_line("### {heading}");
+            out.append_line("");
+            out.append_line("| site | before | after | lines |");
+            out.append_line("| --- | ---: | ---: | ---: |");
+
+            let shown = if rows.count > MAX_ROWS then MAX_ROWS else rows.count fi;
+
+            for i in 0..shown do
+                let row = rows[i];
+
+                out.append_line(
+                    "| `{row.key}` | {_pct(row.from)} | {_pct(row.to)} | {row.lines} |"
+                );
+            od
+
+            out.append_line("");
+
+            if rows.count > shown then
+                out.append_line("...and {rows.count - shown} more, not listed here.");
+                out.append_line("");
+            fi
+        si
+
+        // A run recorded outside Actions has an id no Actions URL resolves,
+        // so it is named rather than linked.
+        _reference(run: RUN_DTO) -> string is
+            for c in run.run_id do
+                if !char.is_digit(c) then
+                    return "run {run.run_id}";
+                fi
+            od
+
+            return
+                "[run {run.run_id}]"
+                "(https://github.com/degory/ghul-coverage-report/actions/runs/{run.run_id})";
+        si
+
+        _rate(covered: int, valid: int) -> double =>
+            if valid > 0 then cast double(covered) * 100.0D / cast double(valid) else 100.0D fi;
+
+        // Formatted explicitly rather than through an interpolation format
+        // specifier, which needs a generic overload the compiler can't
+        // satisfy for `double`, and invariantly, so the numbers read the same
+        // whatever locale the runner happens to have.
+        _pct(rate: double) -> string =>
+            "{rate.to_string("F1", System.Globalization.CultureInfo.invariant_culture)}%";
+
+        _signed(delta: double) -> string is
+            let text = delta.to_string("F1", System.Globalization.CultureInfo.invariant_culture);
+
+            return if delta >= 0.0D then "+{text}" else text fi;
+        si
+    si
+
+    class MOVEMENT(key: string, from: double, to: double, lines: int);
+si

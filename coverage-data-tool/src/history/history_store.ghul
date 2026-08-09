@@ -1,0 +1,192 @@
+namespace Coverage.History is
+    use System.Text.Json.JsonSerializer;
+    use System.Text.Json.JsonSerializerOptions;
+
+    use Collections.LIST;
+    use Collections.MAP;
+    use Collections.SET;
+
+    use IO.Std;
+    use IO.File;
+    use IO.Path;
+    use IO.Directory;
+
+    use Coverage.Output.SNAKE_TO_CAMEL_POLICY;
+
+    // Reads and writes the coverage history: a directory holding one
+    // `totals.jsonl` line per run, and one `runs/<stamp>-<run id>.jsonl`
+    // per-site snapshot behind it.
+    //
+    // Both files are line-oriented and append-only, because the directory is
+    // a git branch: appending a line leaves a small delta, whereas
+    // re-serialising one big document would rewrite the whole blob every run.
+    // Neither is ever read in full by the site, which gets its own compact
+    // `history.json`.
+    class HISTORY_STORE(directory: string) is
+        _options: JsonSerializerOptions;
+
+        init(..) is
+            let o = JsonSerializerOptions();
+            o.property_naming_policy = SNAKE_TO_CAMEL_POLICY();
+            o.property_name_case_insensitive = true;
+            _options = o;
+        si
+
+        totals_path: string => Path.combine(directory, "totals.jsonl");
+
+        // Every recorded run, oldest first. A line that fails to parse is
+        // skipped rather than fatal: a corrupt or future-schema line should
+        // cost the comparison against that run, not the run being recorded.
+        read_runs() -> LIST[RUN_DTO] is
+            let result = LIST[RUN_DTO]();
+
+            if !File.exists(totals_path) then
+                return result;
+            fi
+
+            for line in File.read_all_lines(totals_path) do
+                let trimmed = line.trim();
+
+                if trimmed.length == 0 then
+                    continue;
+                fi
+
+                try
+                    let run = JsonSerializer.deserialize[RUN_DTO](trimmed, _options);
+
+                    if run? then
+                        result.add(run);
+                    fi
+                catch e: System.Text.Json.JsonException
+                    Std.error.write_line("skipping unreadable history line: {e.message}");
+                yrt
+            od
+
+            return result;
+        si
+
+        // The per-site rows of an earlier run, keyed by site. Empty when the
+        // run predates the history mechanism, or its snapshot has aged out.
+        read_snapshot(relative_path: string?) -> MAP[string, SITE_DTO] is
+            let result = MAP[string, SITE_DTO]();
+
+            if !relative_path? then
+                return result;
+            fi
+
+            let path = Path.combine(directory, relative_path);
+
+            if !File.exists(path) then
+                return result;
+            fi
+
+            for line in File.read_all_lines(path) do
+                let trimmed = line.trim();
+
+                if trimmed.length == 0 then
+                    continue;
+                fi
+
+                try
+                    let site = JsonSerializer.deserialize[SITE_DTO](trimmed, _options);
+
+                    if site? then
+                        result[site.key] = site;
+                    fi
+                catch e: System.Text.Json.JsonException
+                    Std.error.write_line("skipping unreadable snapshot line: {e.message}");
+                yrt
+            od
+
+            return result;
+        si
+
+        // A stable, sortable file name for one run's snapshot. The run id
+        // rather than a commit sha, so two runs measuring the same commit
+        // (an ad-hoc dispatch alongside the schedule) can't collide.
+        snapshot_name(timestamp: string, run_id: string) -> string =>
+            "runs/{timestamp.replace(':', '-')}-{run_id}.jsonl";
+
+        write(run: RUN_DTO, sites: LIST[SITE_DTO]) is
+            Directory.create_directory(Path.combine(directory, "runs"));
+
+            let snapshot = run.snapshot;
+
+            if snapshot? then
+                let builder = System.Text.StringBuilder();
+
+                for site in sites do
+                    builder.append_line(JsonSerializer.serialize[SITE_DTO](site, _options));
+                od
+
+                File.write_all_text(Path.combine(directory, snapshot), builder.to_string());
+            fi
+
+            File.append_all_text(
+                totals_path,
+                "{JsonSerializer.serialize[RUN_DTO](run, _options)}\n"
+            );
+        si
+
+        // Drop the oldest snapshots, keeping the headline numbers that point
+        // at them. A run's per-site detail is worth having for as long as
+        // anyone might bisect a regression through it; its headline number is
+        // worth having for the graph for ever, and costs a couple of hundred
+        // bytes.
+        prune(keep: int) is
+            let runs = read_runs();
+            let with_snapshots = runs | .filter(r => r.snapshot?) | .collect_list();
+
+            if with_snapshots.count <= keep then
+                return;
+            fi
+
+            let dropping = SET[string]();
+
+            for i in 0..(with_snapshots.count - keep) do
+                let run = with_snapshots[i];
+                let path = Path.combine(directory, run.snapshot!);
+
+                if File.exists(path) then
+                    File.delete(path);
+                fi
+
+                dropping.add(run.run_id);
+            od
+
+            let builder = System.Text.StringBuilder();
+
+            for run in runs do
+                let rewritten =
+                    if dropping.contains(run.run_id) then
+                        RUN_DTO(
+                            run.schema_version, run.timestamp, run.run_id, run.run_attempt,
+                            run.event, run.report_commit, run.ghul_commit,
+                            run.lines_covered, run.lines_valid,
+                            run.branches_covered, run.branches_valid,
+                            null, run.source, run.note
+                        )
+                    else
+                        run
+                    fi;
+
+                builder.append_line(JsonSerializer.serialize[RUN_DTO](rewritten, _options));
+            od
+
+            File.write_all_text(totals_path, builder.to_string());
+        si
+
+        // The series the site's trend chart reads. Written into the report
+        // data directory alongside summary.json, so the site build consumes
+        // it exactly as it consumes everything else and the history
+        // directory itself is never a build input.
+        write_site_history(target_directory: string) is
+            let runs = read_runs();
+
+            File.write_all_text(
+                Path.combine(target_directory, "history.json"),
+                JsonSerializer.serialize[LIST[RUN_DTO]](runs, _options)
+            );
+        si
+    si
+si

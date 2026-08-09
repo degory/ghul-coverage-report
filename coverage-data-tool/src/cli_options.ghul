@@ -3,7 +3,20 @@ namespace CoverageDataTool is
         reports_pattern: string,
         project_directory: string,
         target_directory: string,
-        source_prefix: string
+        source_prefix: string,
+        // Where the coverage history lives - a checkout of the report repo's
+        // `coverage-history` branch. Absent means don't record history, which
+        // is what a local run wants.
+        history_directory: string?,
+        // Where to write the run's markdown coverage summary. In CI this is
+        // $GITHUB_STEP_SUMMARY.
+        summary_path: string?,
+        // The commit of the project being measured, which is what a
+        // regression has to be attributed to. The tool can't read it: the
+        // project directory is a second checkout it only ever reads source
+        // from.
+        measured_commit: string?,
+        history_keep: int
     ) is
         // `-reports:` accepts `;`-separated glob patterns (matching
         // ReportGenerator's own convention); `-sourceprefix:` is the
@@ -14,7 +27,11 @@ namespace CoverageDataTool is
             let reports: string? mut;
             let project: string? mut;
             let target: string? mut;
+            let history: string? mut;
+            let summary: string? mut;
+            let commit: string? mut;
             let source_prefix mut = "src";
+            let keep mut = 100;
 
             for arg in arguments do
                 if arg.starts_with("-reports:") then
@@ -25,6 +42,14 @@ namespace CoverageDataTool is
                     target = arg.substring("-targetdir:".length);
                 elif arg.starts_with("-sourceprefix:") then
                     source_prefix = arg.substring("-sourceprefix:".length);
+                elif arg.starts_with("-historydir:") then
+                    history = arg.substring("-historydir:".length);
+                elif arg.starts_with("-summary:") then
+                    summary = arg.substring("-summary:".length);
+                elif arg.starts_with("-measuredcommit:") then
+                    commit = arg.substring("-measuredcommit:".length);
+                elif arg.starts_with("-historykeep:") then
+                    keep = int.parse(arg.substring("-historykeep:".length));
                 fi
             od
 
@@ -32,7 +57,10 @@ namespace CoverageDataTool is
                 return null;
             fi
 
-            return CLI_OPTIONS(reports, project, target, source_prefix);
+            return CLI_OPTIONS(
+                reports, project, target, source_prefix,
+                history, summary, commit, keep
+            );
         si
     si
 si

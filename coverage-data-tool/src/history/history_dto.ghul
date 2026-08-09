@@ -1,0 +1,45 @@
+namespace Coverage.History is
+    // One site's line coverage in one run.
+    //
+    // A key is `<file>` for a whole file and `<file>::<TYPE>` for a type,
+    // with `-` standing in for a namespace's loose global functions. Line
+    // numbers are deliberately not part of it - they drift with every edit,
+    // and a history whose keys stop matching the report is worse than no
+    // history.
+    //
+    // Methods are left out. A method-level history would roughly quintuple
+    // the stored volume to answer a question the type-level rows already
+    // answer well enough: which part of the compiler lost coverage.
+    class SITE_DTO(key: string, lines_covered: int, lines_valid: int);
+
+    // One run's headline numbers, plus enough provenance to attribute a
+    // regression to something. `ghul_commit` is what was measured;
+    // `report_commit` is what measured it, which matters when the change in
+    // the numbers turns out to be a change in how they are counted.
+    class RUN_DTO(
+        schema_version: int,
+        timestamp: string,
+        run_id: string,
+        run_attempt: int,
+        event: string,
+        report_commit: string?,
+        ghul_commit: string?,
+        lines_covered: int,
+        lines_valid: int,
+        branches_covered: int,
+        branches_valid: int,
+        // Path to this run's per-site rows, relative to the history
+        // directory. Null once the snapshot has aged out of the retention
+        // window - the headline numbers are kept for ever, the detail is not.
+        snapshot: string?,
+        // "run" for a run that recorded itself, "recovered" for one seeded
+        // from an artifact after the fact.
+        source: string,
+        // Set by hand on the branch when a run's numbers are not comparable
+        // with the run before it, because what counts as a coverable line
+        // changed rather than because coverage did. The chart marks such a
+        // run, and the regression report says so instead of attributing the
+        // step to the code.
+        note: string?
+    );
+si
