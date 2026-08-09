@@ -10,6 +10,18 @@ Intended as a drop-in replacement for the report-generation half of
 [ReportGenerator](https://reportgenerator.io). Deployed to GitHub Pages at
 <https://degory.github.io/ghul-coverage-report/>.
 
+The numbers behind the report are published alongside it, for anything that
+wants to read them rather than look at them:
+
+| URL | What it holds |
+| --- | --- |
+| [`/badge.json`](https://degory.github.io/ghul-coverage-report/badge.json) | headline line coverage, as a shields.io endpoint |
+| [`/data/summary.json`](https://degory.github.io/ghul-coverage-report/data/summary.json) | every namespace, type and method, with its line and branch counts |
+| [`/data/files.json`](https://degory.github.io/ghul-coverage-report/data/files.json) | per-file line counts |
+
+These carry the most recent run only. Each run also uploads the same three
+files as its `coverage-data` artifact, which is retained for 90 days.
+
 ## Layout
 
 - `coverage-data-tool/` — a ghūl console app. Parses and merges Cobertura
