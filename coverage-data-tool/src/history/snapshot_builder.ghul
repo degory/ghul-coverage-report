@@ -1,0 +1,53 @@
+namespace Coverage.History is
+    use Collections.LIST;
+    use Collections.MAP;
+
+    use Coverage.Model.NAMESPACE_COVERAGE;
+
+    // Flattens the coverage tree to the rows a snapshot stores: one per type,
+    // and one per file summing the types in it.
+    //
+    // File rows are summed from the type rows rather than read from the
+    // per-file list, which counts every source file whether or not any suite
+    // instrumented it. A file with no instrumented types then contributes no
+    // row at all, rather than a 0/0 row that would read as a total loss of
+    // coverage the first time it appeared.
+    class SNAPSHOT_BUILDER is
+        init() is si
+
+        build(namespaces: LIST[NAMESPACE_COVERAGE]) -> LIST[SITE_DTO] is
+            let file_covered = MAP[string, int]();
+            let file_valid = MAP[string, int]();
+            let sites = LIST[SITE_DTO]();
+
+            for ns in namespaces do
+                for t in ns.types do
+                    let name = if t.name.length == 0 then "-" else t.name fi;
+
+                    sites.add(SITE_DTO("{t.file}::{name}", t.lines_covered, t.lines_valid));
+
+                    if !file_covered.contains_key(t.file) then
+                        file_covered[t.file] = 0;
+                        file_valid[t.file] = 0;
+                    fi
+
+                    file_covered[t.file] = file_covered[t.file] + t.lines_covered;
+                    file_valid[t.file] = file_valid[t.file] + t.lines_valid;
+                od
+            od
+
+            for (file, covered) in file_covered do
+                sites.add(SITE_DTO(file, covered, file_valid[file]));
+            od
+
+            sites.sort(
+                System.Comparison[SITE_DTO](
+                    (a: SITE_DTO, b: SITE_DTO) -> int =>
+                        System.StringComparer.ordinal.compare(a.key, b.key)
+                )
+            );
+
+            return sites;
+        si
+    si
+si

@@ -1,0 +1,80 @@
+namespace Coverage.History is
+    use Collections.LIST;
+
+    use Coverage.Model.NAMESPACE_COVERAGE;
+
+    // Builds the record of who measured what, when.
+    //
+    // The run's own identity comes from the standard GitHub Actions
+    // environment rather than from arguments, so the workflow doesn't have to
+    // restate what the runner already knows. Outside CI those are unset and a
+    // local run records itself as such - useful when trying the mechanism
+    // out, and distinguishable in the series afterwards.
+    class RUN_IDENTITY(store: HISTORY_STORE) is
+        SCHEMA_VERSION: int static => 1;
+
+        build(namespaces: LIST[NAMESPACE_COVERAGE], measured_commit: string?) -> RUN_DTO is
+            let timestamp =
+                System.DateTime.utc_now.to_string(
+                    "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                    System.Globalization.CultureInfo.invariant_culture
+                );
+
+            let run_id = _environment("GITHUB_RUN_ID") ?? "local-{timestamp.replace(':', '-')}";
+            let event = _environment("GITHUB_EVENT_NAME") ?? "local";
+            let attempt = _environment("GITHUB_RUN_ATTEMPT") ?? "1";
+
+            let lines_covered mut = 0;
+            let lines_valid mut = 0;
+            let branches_covered mut = 0;
+            let branches_valid mut = 0;
+
+            for ns in namespaces do
+                lines_covered = lines_covered + ns.lines_covered;
+                lines_valid = lines_valid + ns.lines_valid;
+                branches_covered = branches_covered + ns.branches_covered;
+                branches_valid = branches_valid + ns.branches_valid;
+            od
+
+            return RUN_DTO(
+                SCHEMA_VERSION,
+                timestamp,
+                run_id,
+                _to_int(attempt),
+                event,
+                _environment("GITHUB_SHA"),
+                measured_commit,
+                lines_covered,
+                lines_valid,
+                branches_covered,
+                branches_valid,
+                store.snapshot_name(timestamp, run_id),
+                "run",
+                null
+            );
+        si
+
+        // An unset variable and one set to the empty string mean the same
+        // thing here, and a workflow that forwards an absent value produces
+        // the second rather than the first.
+        _environment(name: string) -> string? is
+            let value = System.Environment.get_environment_variable(name);
+
+            if !value? \/ value.length == 0 then
+                return null;
+            fi
+
+            return value;
+        si
+
+        _to_int(text: string) -> int is
+            let parsed: int mut;
+
+            if int.try_parse(text, parsed ref) then
+                return parsed;
+            fi
+
+            return 1;
+        si
+    si
+si

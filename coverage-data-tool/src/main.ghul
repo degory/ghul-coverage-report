@@ -82,8 +82,60 @@ namespace CoverageDataTool is
             );
 
             Std.out.write_line("wrote report data to {options.target_directory}");
+
+            if let options.history_directory then
+                _record_history(options, history_directory, namespaces);
+            else
+                // The site imports history.json unconditionally, so a run
+                // that isn't recording history still has to leave one behind
+                // for the build to consume.
+                File.write_all_text(Path.combine(options.target_directory, "history.json"), "[]");
+            fi
         finally
             session.dispose();
+        yrt
+    si
+
+    // Appends this run to the coverage history, and reports how it compares
+    // with the run before it.
+    //
+    // Runs after the report data is written, and never fails the run: the
+    // measurement is the valuable part and it is already on disk by this
+    // point, so a history directory that turns out not to be writable should
+    // cost the history entry rather than the report.
+    _record_history(
+        options: CLI_OPTIONS,
+        history_directory: string,
+        namespaces: LIST[Coverage.Model.NAMESPACE_COVERAGE]
+    ) is
+        try
+            let store = Coverage.History.HISTORY_STORE(history_directory);
+
+            let runs = store.read_runs();
+            let previous = if runs.count > 0 then runs[runs.count - 1] else null fi;
+            let previous_snapshot = if previous? then previous.snapshot else null fi;
+            let previous_sites = store.read_snapshot(previous_snapshot);
+
+            let sites = Coverage.History.SNAPSHOT_BUILDER().build(namespaces);
+            let run = Coverage.History.RUN_IDENTITY(store).build(namespaces, options.measured_commit);
+
+            store.write(run, sites);
+            store.prune(options.history_keep);
+            store.write_site_history(options.target_directory);
+
+            Std.out.write_line("recorded run {run.run_id} in {history_directory}");
+
+            let markdown =
+                Coverage.History.REGRESSION_REPORT()
+                    .render(previous, previous_sites, run, sites);
+
+            Std.out.write_line(markdown);
+
+            if let options.summary_path then
+                File.append_all_text(summary_path, "{markdown}\n");
+            fi
+        catch e: System.Exception
+            Std.error.write_line("could not record coverage history: {e.message}");
         yrt
     si
 
