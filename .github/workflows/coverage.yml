@@ -112,11 +112,18 @@ jobs:
       # which is how the badge lands at a stable, predictable deployed
       # URL (.../badge.json) for a README to point a shields.io endpoint
       # badge at.
-      - name: Stage the badge for the site build
+      #
+      # The site imports summary.json and files.json at build time, so
+      # the numbers reach a reader only as rendered HTML. Staging them
+      # too publishes the same data in the form a script can consume,
+      # under .../data/, without a second pipeline to keep in step.
+      - name: Stage the badge and the report data for the site build
         working-directory: ghul-coverage-report/site
         run: |
-          mkdir -p public
+          mkdir -p public/data
           cp coverage-data/badge.json public/badge.json
+          cp coverage-data/summary.json coverage-data/files.json public/data/
+          cp coverage-data/badge.json public/data/
 
       - name: Install site dependencies
         working-directory: ghul-coverage-report/site
@@ -133,6 +140,24 @@ jobs:
           if [[ -n "$message" ]]; then
             echo "**Line coverage: $message**" >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      # Deployment keeps only the newest report, and the rendered site is
+      # a quarter of a gigabyte to download for numbers that occupy a
+      # megabyte. This artifact is the per-run copy: small enough to
+      # fetch on its own, and retained after the deployed data has moved
+      # on. The per-file source data under coverage-data/files/ is left
+      # out - it is two orders of magnitude larger and only the renderer
+      # reads it.
+      - name: Upload the report data
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-data
+          path: |
+            ghul-coverage-report/site/coverage-data/summary.json
+            ghul-coverage-report/site/coverage-data/files.json
+            ghul-coverage-report/site/coverage-data/badge.json
+          retention-days: 90
 
       - name: Upload coverage report
         if: always()
