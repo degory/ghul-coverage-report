@@ -8,17 +8,17 @@ and per-line coverage annotation.
 
 Intended as a drop-in replacement for the report-generation half of
 [ReportGenerator](https://reportgenerator.io). Deployed to GitHub Pages at
-<https://degory.github.io/ghul-coverage-report/>.
+<https://ghul-lang.github.io/ghul-coverage-report/>.
 
 The numbers behind the report are published alongside it, for anything that
 wants to read them rather than look at them:
 
 | URL | What it holds |
 | --- | --- |
-| [`/badge.json`](https://degory.github.io/ghul-coverage-report/badge.json) | headline line coverage, as a shields.io endpoint |
-| [`/data/summary.json`](https://degory.github.io/ghul-coverage-report/data/summary.json) | every namespace, type and method, with its line and branch counts |
-| [`/data/files.json`](https://degory.github.io/ghul-coverage-report/data/files.json) | per-file line counts |
-| [`/data/history.json`](https://degory.github.io/ghul-coverage-report/data/history.json) | every recorded run's headline numbers, oldest first |
+| [`/badge.json`](https://ghul-lang.github.io/ghul-coverage-report/badge.json) | headline line coverage, as a shields.io endpoint |
+| [`/data/summary.json`](https://ghul-lang.github.io/ghul-coverage-report/data/summary.json) | every namespace, type and method, with its line and branch counts |
+| [`/data/files.json`](https://ghul-lang.github.io/ghul-coverage-report/data/files.json) | per-file line counts |
+| [`/data/history.json`](https://ghul-lang.github.io/ghul-coverage-report/data/history.json) | every recorded run's headline numbers, oldest first |
 
 The first three carry the most recent run only. Each run also uploads them as
 its `coverage-data` artifact, which is retained for 90 days.

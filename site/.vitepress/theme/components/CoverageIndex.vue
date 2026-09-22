@@ -18,7 +18,7 @@ function pct(x) {
 // Matches the flattening files/[slug].paths.js uses to name each
 // generated file page. withBase() prepends the site's deploy-time base
 // path (vitepress.config.mts) - this is a GitHub Pages *project* site
-// (degory.github.io/<repo>/), so an unprefixed absolute path resolves to
+// (ghul-lang.github.io/<repo>/), so an unprefixed absolute path resolves to
 // the wrong origin-root URL entirely.
 function fileLink(file, line) {
   const slug = file.replace(/\//g, '__').replace(/\.ghul$/, '')
