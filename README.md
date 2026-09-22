@@ -25,7 +25,7 @@ its `coverage-data` artifact, which is retained for 90 days.
 
 ## Coverage history
 
-Every run appends itself to the [`coverage-history`](https://github.com/degory/ghul-coverage-report/tree/coverage-history)
+Every run appends itself to the [`coverage-history`](https://github.com/ghul-lang/ghul-coverage-report/tree/coverage-history)
 branch, which is data only — no code, no site. That branch is the answer to
 "has coverage moved, and what moved it":
 
@@ -59,18 +59,18 @@ instead of blaming the code.
   `SEMANTIC_TOKENS`, `HOVER_MAP`) over the project's source, and writes a
   directory of JSON data files consumed by `site/`.
 - `site/` — a VitePress site (forked from
-  [ghul-dev](https://github.com/degory/ghul-dev)'s example-rendering
+  [ghul-dev](https://github.com/ghul-lang/ghul-dev)'s example-rendering
   pipeline: the same vendored TextMate grammar, Shiki-based highlighting
   build step, and `GhulExample.vue`-derived rendering) that turns
   `coverage-data-tool`'s JSON output into the static report.
 - `.github/workflows/coverage.yml` — the scheduled job (Mon/Thu 03:00 UTC,
   plus manual dispatch) that runs the whole pipeline end to end: checks out
-  [degory/ghul](https://github.com/degory/ghul), runs its
+  [ghul-lang/ghul](https://github.com/ghul-lang/ghul), runs its
   `build/coverage.sh` to capture Cobertura reports across the unit,
   integration, cross-assembly and analysis suites, runs
   `coverage-data-tool` against them, records the run in the
   `coverage-history` branch, builds `site/`, and deploys the
-  result. Coverage capture lives in `degory/ghul` (it needs that repo's
+  result. Coverage capture lives in `ghul-lang/ghul` (it needs that repo's
   own source and tests); turning the captured data into a report — and
   hosting it — is this repo's job, hence the cross-repo checkout runs
   here rather than the other way around.

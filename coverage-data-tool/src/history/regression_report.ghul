@@ -173,7 +173,7 @@ namespace Coverage.History is
 
             return
                 "[run {run.run_id}]"
-                "(https://github.com/degory/ghul-coverage-report/actions/runs/{run.run_id})";
+                "(https://github.com/ghul-lang/ghul-coverage-report/actions/runs/{run.run_id})";
         si
 
         _rate(covered: int, valid: int) -> double =>
