@@ -1,14 +1,14 @@
 name: Coverage
 
-# Measures how much of degory/ghul's own ghūl source the end-to-end suites
+# Measures how much of ghul-lang/ghul's own ghūl source the end-to-end suites
 # execute, and renders the result as this repo's HTML report. Runs here
-# (checking out degory/ghul rather than the other way around) because
+# (checking out ghul-lang/ghul rather than the other way around) because
 # turning captured Cobertura data into the report - and hosting it - is
-# what this repo is for; degory/ghul's build/coverage.sh only captures.
+# what this repo is for; ghul-lang/ghul's build/coverage.sh only captures.
 #
 # Deliberately kept off the pull-request path: instrumentation slows the
 # integration suite by roughly an order of magnitude, which is fine for a
-# periodic run but would not fit degory/ghul's PR gate budget.
+# periodic run but would not fit ghul-lang/ghul's PR gate budget.
 on:
   schedule:
     # Mondays and Thursdays, 03:00 UTC.
@@ -57,7 +57,7 @@ jobs:
       - name: Check out ghul
         uses: actions/checkout@v6
         with:
-          repository: degory/ghul
+          repository: ghul-lang/ghul
           path: ghul
 
       # The series this run appends itself to, and reads its predecessor from.
@@ -111,7 +111,7 @@ jobs:
 
       # coverage-data-tool drives the analyser against ghul directly, so
       # it needs the same reference-assembly manifest the analyser always
-      # needs (see degory/ghul-mcp for another consumer of this target).
+      # needs (see ghul-lang/ghul-mcp for another consumer of this target).
       - name: Generate ghul's assemblies manifest
         working-directory: ghul
         run: dotnet build -verbosity:quiet -t:GenerateAssembliesJson

@@ -48,11 +48,11 @@ npm run dev     # or: npm run build && npm run preview
 ## CI
 
 `.github/workflows/coverage.yml` runs the whole pipeline on a schedule
-(Mon/Thu 03:00 UTC) plus manual dispatch: checks out `degory/ghul` alongside
+(Mon/Thu 03:00 UTC) plus manual dispatch: checks out `ghul-lang/ghul` alongside
 this repo, runs `ghul/build/coverage.sh` to capture Cobertura reports, then
 `coverage-data-tool` and `site/` exactly as in local dev above but with
 absolute (`${{ github.workspace }}`-rooted) paths across the two checkouts.
-Deploys to this repo's own GitHub Pages, not `degory/ghul`'s — see the
+Deploys to this repo's own GitHub Pages, not `ghul-lang/ghul`'s — see the
 README for why the checkout direction is this way round.
 
 ## Coverage history
